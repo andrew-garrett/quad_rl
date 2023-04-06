@@ -1,6 +1,6 @@
 # Investigating Deep Reinnforcement Learning for Quadrotor Planning and Control
 
-## Andrew Garrett, Philip Sieg, Ramya Muthukrishnan
+## Andrew Garrett, Ramya Muthukrishnan, Philip Sieg
 
 For our ESE650 Final Project, we plan to...
 
@@ -28,3 +28,5 @@ Below should generate a vizualization window of 3 quads flying along a helical p
 ```
 python gym-pybullet-drones/gym_pybullet_drones/examples/fly.py
 ```
+
+# TODO:
