@@ -29,4 +29,18 @@ Below should generate a vizualization window of 3 quads flying along a helical p
 python gym-pybullet-drones/gym_pybullet_drones/examples/fly.py
 ```
 
+To train an agent to hover:
+
+```
+python gym-pybullet-drones/experiments/learning/singleagent.py --cpu 2
+```
+
+To view training results, in either a separate terminal or after running the above:
+```
+tensorboard --logdir ./results
+```
+
 # TODO:
+
+ - [] Figure out tensorboard vs. wandb results tracking
+ - [] 
