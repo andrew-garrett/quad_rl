@@ -10,6 +10,7 @@ from tqdm import tqdm
 from itertools import product
 import numpy as np
 from scipy.interpolate import make_interp_spline
+from scipy.sparse.linalg import lsmr
 import matplotlib.pyplot as plt
 
 from task_gen import TRAJECTORY_PARAMS
@@ -249,11 +250,101 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
             super().__init__(params, root, task_name)
         else:
             return TrajectoryGenerator(params, root, task_name)
+
+        # minimum snap
+        num_coef = 8 * (self.n_wpts - 1)  # unknown c to solve for every segments
+        A = np.zeros((num_coef, num_coef))
+        b = np.zeros((num_coef, 3))
+        index = 0  # keep records of rows
+
+        # start
+        A[0:4, 0:8] = np.array([[0, 0, 0, 0, 0, 0, 0, 1],
+                                [0, 0, 0, 0, 0, 0, 1, 0],
+                                [0, 0, 0, 0, 0, 2, 0, 0],
+                                [0, 0, 0, 0, 6, 0, 0, 0]])
+        b[0, :] = self.points[0]
+        index += 4
+
+        # update the matrix for each segment
+        for i in range(self.n_wpts - 1):
+            temp = self.t_start_vec[i]
+            # end points
+            if i == self.num_points - 2:
+                A[num_coef - 4:num_coef, num_coef - 8:num_coef] = np.array([
+                    [pow(temp, 7), pow(temp, 6), pow(temp, 5), pow(temp, 4), pow(temp, 3), pow(temp, 2), pow(temp, 1), 1],
+                    [7 * pow(temp, 6), 6 * pow(temp, 5), 5 * pow(temp, 4), 4 * pow(temp, 3), 3 * pow(temp, 2), 2 * pow(temp, 1), 1, 0],
+                    [42 * pow(temp, 5), 30 * pow(temp, 4), 20 * pow(temp, 3), 12 * pow(temp, 2), 6 * pow(temp, 1), 2, 0, 0],
+                    [210 * pow(temp, 4), 120 * pow(temp, 3), 60 * pow(temp, 2), 24 * pow(temp, 1), 6, 0, 0, 0]])
+                b[num_coef - 4] = self.points[i + 1]
+
+            # points between start and end
+            else:
+                # total 8 rows
+                # position constraints x1(t1) = x2(t1) = x1 2*
+                A[index, 8 * i: 8 * (i + 1)] = np.array(
+                    [[pow(temp, 7), pow(temp, 6), pow(temp, 5), pow(temp, 4), pow(temp, 3), pow(temp, 2), pow(temp, 1), 1]])
+                A[index + 1, 8 * (i + 1): 8 * (i + 2)] = np.array([[0, 0, 0, 0, 0, 0, 0, 1]])
+
+                b[index] = self.points[i + 1]
+                b[index + 1] = self.points[i + 1]
+
+                # continuity constrain x1'(t1) = x2'(t1) 6*
+                # velocity
+                A[index + 2, 8 * i: 8 * (i + 2)] = np.array(
+                    [[7 * pow(temp, 6), 6 * pow(temp, 5), 5 * pow(temp, 4), 4 * pow(temp, 3), 3 * pow(temp, 2), 2 * pow(temp, 1), 1, 0,
+                      0, 0, 0, 0, 0, 0, -1, 0]])
+
+                # acceleration
+                A[index + 3, 8 * i: 8 * (i + 2)] = np.array([
+                    [42 * pow(temp, 5), 30 * pow(temp, 4), 20 * pow(temp, 3), 12 * pow(temp, 2), 6 * pow(temp, 1), 2, 0, 0,
+                     0, 0, 0, 0, 0, -2, 0, 0]])
+
+                # jerk
+                A[index + 4, 8 * i: 8 * (i + 2)] = np.array([
+                    [210 * pow(temp, 4), 120 * pow(temp, 3), 60 * pow(temp, 2), 24 * pow(temp, 1), 6, 0, 0, 0,
+                     0, 0, 0, 0, -6, 0, 0, 0]])
+
+                # snap
+                A[index + 5, 8 * i: 8 * (i + 2)] = np.array([
+                    [840 * pow(temp, 3), 360 * pow(temp, 2), 120 * pow(temp, 1), 24, 0, 0, 0, 0,
+                     0, 0, 0, -24, 0, 0, 0, 0]])
+
+                # crackle
+                A[index + 6, 8 * i: 8 * (i + 2)] = np.array([
+                    [2520 * pow(temp, 2), 720 * pow(temp, 1), 120, 0, 0, 0, 0, 0,
+                     0, 0, -120, 0, 0, 0, 0, 0]])
+
+                # pop
+                A[index + 7, 8 * i: 8 * (i + 2)] = np.array([
+                    [5040 * pow(temp, 1), 720, 0, 0, 0, 0, 0, 0,
+                     0, -720, 0, 0, 0, 0, 0, 0]])
+
+                index += 8
+
+        Cx = lsmr(A, b[:, 0])[0]
+        Cy = lsmr(A, b[:, 1])[0]
+        Cz = lsmr(A, b[:, 2])[0]
+        self.c = np.hstack((Cx.reshape(len(A), 1), Cy.reshape(len(A), 1), Cz.reshape(len(A), 1))).reshape(-1, 8, 3)
+
         
     def get_trajectory_state(self, t):
         """
         Get the minimum snap state
         """
+        # for i in range(self.num_points - 1):
+        #     if t == 0:  # start
+        #         x = self.points[0]
+        #     elif t >= time[-1]:  # end
+        #         x = self.points[-1]
+        #     elif time[i] < t <= time[i + 1]:
+        #         t_s = float(t - time[i])
+        #         c = self.c[i]
+
+        #         x = (np.array([pow(t_s, 7), pow(t_s, 6), pow(t_s, 5), pow(t_s, 4), pow(t_s, 3), pow(t_s, 2), pow(t_s, 1), 1]) @ c)
+        #         x_dot = (np.array([7 * pow(t_s, 6), 6 * pow(t_s, 5), 5 * pow(t_s, 4), 4 * pow(t_s, 3), 3 * pow(t_s, 2), 2 * pow(t_s, 1), 1, 0]) @ c)
+        #         x_ddot = (np.array([42 * pow(t_s, 5), 30 * pow(t_s, 4), 20 * pow(t_s, 3), 12 * pow(t_s, 2), 6 * pow(t_s, 1), 2, 0, 0]) @ c)
+        #         x_dddot = (np.array([210 * pow(t_s, 4), 120 * pow(t_s, 3), 60 * pow(t_s, 2), 24 * pow(t_s, 1), 6, 0, 0, 0]) @ c)
+        #         x_ddddot = (np.array([840 * pow(t_s, 3), 360 * pow(t_s, 2), 120 * pow(t_s, 1), 24, 0, 0, 0, 0]) @ c)
         return (np.zeros((3,1)) if i < 5 else 0. for i in range(7))
 
 
