@@ -12,17 +12,11 @@ import numpy as np
 from task_battery import *
 
 
-#################### GLOBAL VARIABLES ####################
-##########################################################
+#################### GLOBAL PARAMETERS ####################
+###########################################################
 
 
-DEFAULT_ROOT = "./bootstrap/datasets/"
-
-DEFAULT_DATASET_NAME = "small000"
-
-DEFAULT_TASK_BATTERY = TaskBattery.SMALL
-
-TRAJECTORY_PARAMS = ("num_drones", "speed", "rdp_threshold", "trajectory_generator")
+DEFAULT_DATASET_NAME = f"{DEFAULT_TASK_BATTERY.name}000"
 
 
 #################### GENERATE WAYPOINTS FOR TASK BATTERY ####################
@@ -69,20 +63,24 @@ class Tasks:
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            with open(f"{root}{dataset_name}/waypoints/task_linear_step_ax-{ax}.csv", "w", newline="") as f:
-                csv_writer = csv.writer(f)
-                header = ["x", "y", "z"]
-                if ax == "x":
-                    row = [1.0, 0.0, 0.0]
-                elif ax == "y":
-                    row = [0.0, 1.0, 0.0]
-                else:
-                    row = [0.0, 0.0, 1.0]
-                footer = [0.0, 0.0, 0.0]
+            task_fname = f"{root}{dataset_name}/waypoints/task_linear_step_ax-{ax}.csv"
+            if os.path.exists(task_fname):
+                continue
+            else:
+                with open(task_fname, "w", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    header = ["x", "y", "z"]
+                    if ax == "x":
+                        row = [1.0, 0.0, 0.0]
+                    elif ax == "y":
+                        row = [0.0, 1.0, 0.0]
+                    else:
+                        row = [0.0, 0.0, 1.0]
+                    footer = [0.0, 0.0, 0.0]
 
-                csv_writer.writerow(header)
-                csv_writer.writerow(row)
-                csv_writer.writerow(footer)
+                    csv_writer.writerow(header)
+                    csv_writer.writerow(row)
+                    csv_writer.writerow(footer)
         print("Linear-Step Tasks Generated")
         return
 
@@ -95,18 +93,22 @@ class Tasks:
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            with open(f"{root}{dataset_name}/waypoints/task_angular_step_ax-{ax}.csv", "w", newline="") as f:
-                csv_writer = csv.writer(f)
-                header = ["x", "y", "z"]
-                if ax == "x":
-                    footer = [0.0, 0.0, 0.0]
-                elif ax == "y":
-                    footer = [0.0, 0.0, 0.0]
-                else:
-                    footer = [0.0, 0.0, 0.0]
+            task_fname = f"{root}{dataset_name}/waypoints/task_angular_step_ax-{ax}.csv"
+            if os.path.exists(task_fname):
+                continue
+            else:
+                with open(task_fname, "w", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    header = ["x", "y", "z"]
+                    if ax == "x":
+                        footer = [0.0, 0.0, 0.0]
+                    elif ax == "y":
+                        footer = [0.0, 0.0, 0.0]
+                    else:
+                        footer = [0.0, 0.0, 0.0]
 
-                csv_writer.writerow(header)
-                csv_writer.writerow(footer)
+                    csv_writer.writerow(header)
+                    csv_writer.writerow(footer)
         print("Angular-Step Tasks Generated")
         return
 
@@ -119,20 +121,24 @@ class Tasks:
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            with open(f"{root}{dataset_name}/waypoints/task_straight_away_ax-{ax}.csv", "w", newline="") as f:
-                csv_writer = csv.writer(f)
-                header = ["x", "y", "z"]
-                if ax == "x":
-                    row = [5.0, 0.0, 0.0]
-                elif ax == "y":
-                    row = [0.0, 5.0, 0.0]
-                else:
-                    row = [0.0, 0.0, 5.0]
-                footer = [0.0, 0.0, 0.0]
-                
-                csv_writer.writerow(header)
-                csv_writer.writerow(row)
-                csv_writer.writerow(footer)
+            task_fname = f"{root}{dataset_name}/waypoints/task_straight_away_ax-{ax}.csv"
+            if os.path.exists(task_fname):
+                continue
+            else:
+                with open(task_fname, "w", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    header = ["x", "y", "z"]
+                    if ax == "x":
+                        row = [5.0, 0.0, 0.0]
+                    elif ax == "y":
+                        row = [0.0, 5.0, 0.0]
+                    else:
+                        row = [0.0, 0.0, 5.0]
+                    footer = [0.0, 0.0, 0.0]
+                    
+                    csv_writer.writerow(header)
+                    csv_writer.writerow(row)
+                    csv_writer.writerow(footer)
         print("Straight-Away Tasks Generated")
         return
 
@@ -144,24 +150,28 @@ class Tasks:
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax, dh, r, res = param_grid_i
-            with open(f"{root}{dataset_name}/waypoints/task_figure_eight_ax-{ax}_radii-{r}_dh-{dh}_res-{res}.csv", "w", newline="") as f:
-                csv_writer = csv.writer(f)
-                header = ["x", "y", "z"]
-                csv_writer.writerow(header)
+            task_fname = f"{root}{dataset_name}/waypoints/task_figure_eight_ax-{ax}_radii-{r}_dh-{dh}_res-{res}.csv"
+            if os.path.exists(task_fname):
+                continue
+            else:
+                with open(task_fname, "w", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    header = ["x", "y", "z"]
+                    csv_writer.writerow(header)
 
-                num_wpts = int(8*np.pi / res)
-                t = np.linspace(0, 2*np.pi, num=num_wpts)
-                long_axis = np.cos(r*t)
-                short_axis = 0.5 * np.sin(r*t) * long_axis
-                perp_axis = np.sin(dh*t)
-                for t_step in range(num_wpts):
-                    if ax == 'x':
-                        row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]
-                    elif ax == 'y':
-                        row = [perp_axis[t_step], long_axis[t_step], short_axis[t_step]]
-                    else:
-                        row = [short_axis[t_step], perp_axis[t_step], long_axis[t_step]]
-                    csv_writer.writerow(row)
+                    num_wpts = int(DEFAULT_T / res**2)
+                    t = np.linspace(0, DEFAULT_T, num=num_wpts)
+                    long_axis = np.cos(r*t)
+                    short_axis = 0.5 * np.sin(r*t) * long_axis
+                    perp_axis = np.sin(dh*t)
+                    for t_step in range(num_wpts):
+                        if ax == 'x':
+                            row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]
+                        elif ax == 'y':
+                            row = [perp_axis[t_step], long_axis[t_step], short_axis[t_step]]
+                        else:
+                            row = [short_axis[t_step], perp_axis[t_step], long_axis[t_step]]
+                        csv_writer.writerow(row)
         print("Figure-Eight Tasks Generated")
         return
 

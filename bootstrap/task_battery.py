@@ -3,6 +3,7 @@
 
 
 from enum import Enum
+import numpy as np
 
 
 #################### GLOBAL VARIABLES ####################
@@ -14,6 +15,10 @@ LOW_SPEED = 1.0 # m/s
 MED_SPEED = 3.0 # m/s
 HIGH_SPEED = 6.0 # m/s
 NUM_DRONES = 1
+
+DEFAULT_ROOT = "./bootstrap/datasets/"
+TRAJECTORY_PARAMS = ("num_drones", "speed", "rdp_threshold", "trajectory_generator")
+DEFAULT_T = 5*np.pi
 
 
 #################### FULL BATTERY ######################
@@ -202,6 +207,70 @@ AGGRESSIVE_TASK_BATTERY = {
 }
 
 
+#################### DEBUG TASK BATTERY ####################
+############################################################
+
+
+DEBUG_TASK_BATTERY = {
+    "takeoff": {
+        "taskcase_generator": "generate_takeoff_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "speed": [MED_SPEED]
+        }
+    },
+    "landing": {
+        "taskcase_generator": "generate_landing_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "speed": [MED_SPEED]
+        }
+    },
+    "linear_step": {
+        "taskcase_generator": "generate_linear_step_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "ax": ["x"],
+            "speed": [MED_SPEED]
+        }
+    },
+    "angular_step": {
+        "taskcase_generator": "generate_angular_step_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "ax": ["r", "y"],
+            "rpy0": [30.0],
+            "speed": [MED_SPEED]
+        }
+    },
+    "straight_away": {
+        "taskcase_generator": "generate_straight_away_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "ax": ["x"],
+            "speed": [MED_SPEED]
+        }
+    },
+    "figure_eight": {
+        "taskcase_generator": "generate_figure_eight_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "ax": ["x"],
+            "dh": [0.0, 2.0],
+            "radii": [1.0, 4.0],
+            "rdp_threshold": [0.025, 0.1, 0.25],
+            "res": [0.05, 0.2],
+            "speed": [HIGH_SPEED],
+            "trajectory_generator": [
+                "constant_speed", 
+                "cubic_spline", 
+                "min_snap"
+            ]
+        }
+    }
+}
+
+
 #################### BATTERY ENUM ####################
 ######################################################
 
@@ -213,3 +282,9 @@ class TaskBattery(Enum):
     FULL = FULL_TASK_BATTERY
 
     AGGRO = AGGRESSIVE_TASK_BATTERY
+
+    DEBUG = DEBUG_TASK_BATTERY
+
+    DEFAULT = DEBUG_TASK_BATTERY
+
+DEFAULT_TASK_BATTERY = TaskBattery.FULL

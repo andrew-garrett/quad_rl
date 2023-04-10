@@ -1,0 +1,104 @@
+{
+	"takeoff": {
+		"num_drones": 1,
+		"speed": [
+			1.0,
+			6.0
+		]
+	},
+	"landing": {
+		"num_drones": 1,
+		"speed": [
+			1.0,
+			3.0
+		]
+	},
+	"hover": {
+		"num_drones": 1,
+		"speed": [
+			0.0
+		]
+	},
+	"linear_step": {
+		"num_drones": 1,
+		"ax": [
+			"x",
+			"y",
+			"z"
+		],
+		"speed": [
+			1.0,
+			3.0,
+			6.0
+		]
+	},
+	"angular_step": {
+		"num_drones": 1,
+		"ax": [
+			"r",
+			"p",
+			"y"
+		],
+		"rpy0": [
+			5.0,
+			10.0,
+			20.0,
+			30.0,
+			45.0,
+			60.0
+		],
+		"speed": [
+			1.0
+		]
+	},
+	"straight_away": {
+		"num_drones": 1,
+		"ax": [
+			"x",
+			"y",
+			"z"
+		],
+		"speed": [
+			3.0,
+			6.0
+		]
+	},
+	"figure_eight": {
+		"num_drones": 1,
+		"ax": [
+			"x",
+			"y",
+			"z"
+		],
+		"dh": [
+			0.0,
+			1.0,
+			2.0
+		],
+		"radii": [
+			0.25,
+			1.0,
+			2.0
+		],
+		"rdp_threshold": [
+			0.025,
+			0.1,
+			0.25
+		],
+		"res": [
+			0.01,
+			0.05,
+			0.2
+		],
+		"speed": [
+			1.0,
+			3.0,
+			6.0
+		],
+		"trajectory_generator": [
+			"constant_speed",
+			"cubic_spline",
+			"min_snap"
+		]
+	}
+}

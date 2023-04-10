@@ -1,16 +1,14 @@
 #################### IMPORTS ####################
 #################################################
 
-import os
-import json
-import csv
-import re
+
 from tqdm import tqdm
 from itertools import product
 import numpy as np
 
-import task_gen
-import traj_gen
+import task_battery
+from task_gen import generate_tasks
+from traj_gen import yield_all_task_trajectories
 
 
 #################### GLOBAL VARIABLES ####################
@@ -36,9 +34,9 @@ def collect_bootstrap_data(root, dataset_name, num_iterations, num_trials):
             y is all state_{i+1} vectors
     """
     # Generate waypoint csv's
-    task_gen.generate_tasks(root, dataset_name)
+    generate_tasks(root, dataset_name)
 
     # Generate trajectories for each waypoint csv
-    trajectories = traj_gen.yield_all_task_trajectories(root, dataset_name)
+    trajectories = yield_all_task_trajectories(root, dataset_name)
     for i, traj_i in enumerate(trajectories):
         continue
