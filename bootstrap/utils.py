@@ -7,7 +7,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT
+from bootstrap.task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT
 
 
 #################### GLOBAL VARIABLES ####################

@@ -3,7 +3,6 @@
 
 
 import os
-import json
 import csv
 from copy import deepcopy
 from tqdm import tqdm
@@ -12,10 +11,9 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 from scipy.sparse.linalg import lsmr
 from scipy.optimize import minimize
-import matplotlib.pyplot as plt
 
-from task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT, DEFAULT_TASK_BATTERY
-from utils import collect_task_trajectory, get_task_params, plot_trajectories_by_task
+from bootstrap.task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT, DEFAULT_TASK_BATTERY
+from bootstrap.utils import collect_task_trajectory, get_task_params, plot_trajectories_by_task
 
 #################### GLOBAL VARIABLES ####################
 ##########################################################

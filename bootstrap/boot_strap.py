@@ -2,12 +2,8 @@
 #################################################
 
 
-from tqdm import tqdm
-from itertools import product
-import numpy as np
 
-import task_battery
-from task_gen import generate_tasks
+from bootstrap.task_gen import generate_tasks
 from traj_gen import yield_all_task_trajectories
 
 
