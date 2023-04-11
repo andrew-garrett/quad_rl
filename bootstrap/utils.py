@@ -4,6 +4,9 @@
 
 import os
 import json
+from zipfile import ZipFile
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -21,9 +24,45 @@ DEFAULT_TASK_NAME = "linear_step.csv"
 ###################################################################
 
 
-def collect_task_trajectory(task_trajectories, traj):
+def upload2drive(root, dataset_name):
+    data_root = f"{root}{dataset_name}"
+    with ZipFile(f"{data_root}.zip", "w") as zip_object:
+        for folder, sub_folders, f_names in os.walk(data_root):
+            for f_name in f_names:
+                f_path = os.path.join(folder, f_name)
+                zip_object.write(f_path, os.path.basename(f_path))
+    
+    if os.path.exists(f"{data_root}.zip"):
+        gauth = GoogleAuth()
+        drive = GoogleDrive(gauth)
+        gfile = drive.CreateFile({"parents": [{"id": "asdfghjkl"}]})
+        gfile.SetContentFile(f"{data_root}.zip")
+        gfile.Upload()
+        return True
+    else:
+        return False
+
+
+def collect_task_trajectory(
+        task_trajectories, 
+        traj
+    ):
     """
-    Function for running one trial of simulating a trajectory
+    Collect desired state data for one trajectory
+
+    Parameters:
+        - task_trajectories: dict() - defined as follows
+            "waypoints": {
+                "sparse": list(np.array(traj.n_wpts, 3)), # filtered/sparse waypoints
+                "dense": list(np.array(traj.path.shape[0], 3)) # dense path
+            },
+            "x": np.array(n_task_trajectories, 1000, 3), # desired state variable (position)
+            "x_dot": np.array(n_task_trajectories, 1000, 3) # desired state variable (velocity)
+        - traj: TrajectoryGenerator - the TrajectoryGenerator object
+    
+    Returns:
+        - task_trajectories: dict() - same definition as parameter, updated to contain data from TrajectoryGenerator object
+        
     """
     T = traj.t_start_vec.flatten()[-1]
     t_vector = np.linspace(0, T, num=1000)
@@ -63,9 +102,23 @@ def collect_task_trajectory(task_trajectories, traj):
     return task_trajectories
 
 
-def get_task_params(root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME, task_name=DEFAULT_TASK_NAME):
+def get_task_params(
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME, 
+        task_name=DEFAULT_TASK_NAME
+    ):
     """
     Prepare parameters for planning a trajectory
+
+    Parameters:
+        - root: str - The root path for where datasets are located
+        - dataset_name: str - The name of the dataset
+        - task_name: str - The name of the current task
+    
+    Returns:
+        - params_prepped: dict() - dictionary of (parameter_name, parameter_value) key-value pairs
+            - Note: all values in the dictionary should be scalars or strings, no lists
+
     """
 
     # load params
@@ -92,14 +145,25 @@ def get_task_params(root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME, task_n
     return params_prepped
 
 
-def plot_trajectories_by_task(task_group_trajectory_dict, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME, task_group=DEFAULT_TASK_NAME):
+def plot_trajectories_by_task(
+        task_group_trajectory_dict, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME, 
+        task_group=DEFAULT_TASK_NAME
+    ):
     """
-    Function to plot waypoints and trajectories from a given group of tasks
+    Plot waypoints and trajectories from a given group of tasks in a task_battery
+    Saves plots to the task_plots/ subdirectory of the dataset_name/ directory
+
+    Parameters:
+        - task_group_trajectory_dict: dict() - dictionary of (task_name, task_trajectory_dict) key-value pairs
+        - root: str - The root path for where datasets are located
+        - dataset_name: str - The name of the dataset
+        - task_name: str - The name of the current task
+
     """
     waypoints = task_group_trajectory_dict[task_group]["waypoints"]
     x_traj = task_group_trajectory_dict[task_group]["x"]
-    x_dot_traj = task_group_trajectory_dict[task_group]["x_dot"]
-    speed_traj = np.linalg.norm(x_dot_traj, axis=(-1))
 
     plt_root = f"{root}{dataset_name}/task_plots/"
     if not os.path.exists(plt_root):
@@ -109,7 +173,7 @@ def plot_trajectories_by_task(task_group_trajectory_dict, root=DEFAULT_ROOT, dat
     # WAYPOINTS
     dense_wpts, sparse_wpts = waypoints["dense"], waypoints["sparse"]
     n_paths = len(dense_wpts)
-    step_factor = 20
+    step_factor = 10
     for i in range(0, n_paths, step_factor):
         dense_path = dense_wpts[i].T
         sparse_path = sparse_wpts[i].T
@@ -125,13 +189,11 @@ def plot_trajectories_by_task(task_group_trajectory_dict, root=DEFAULT_ROOT, dat
     # TRAJECTORIES
     for i in range(0, n_paths, step_factor):
         traj = x_traj[i].T
-
         traj = traj[:, np.sum(traj, axis=0) != -300.0].reshape((3, -1))
         # traj[0, :] += int(i / (2*step_factor))
         p = ax2.plot(*traj, label="trajectory")
-    # fig2.colorbar(p)
     fig2.suptitle(f"{task_group} trajectories")
     plt.savefig(f"{plt_root}{task_group}_traj.png")
 
-    plt.show()
+    # plt.show()
     plt.close("all")

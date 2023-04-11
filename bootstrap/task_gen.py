@@ -2,7 +2,6 @@
 #################################################
 
 
-from enum import Enum
 import os
 import json
 import csv
@@ -31,7 +30,20 @@ class Tasks:
         pass
 
     @staticmethod
-    def generate_takeoff_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_takeoff_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
+        """
+        Generate tasks for takeoff
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        
+        """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
@@ -39,7 +51,20 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_landing_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_landing_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
+        """
+        Generate tasks for landing
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        
+        """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
@@ -47,7 +72,20 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_hover_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_hover_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
+        """
+        Generate tasks for hover
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        
+        """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
@@ -55,10 +93,22 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_linear_step_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_linear_step_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
         """
+        Generate tasks for linear unit steps
+
         For x,y,z directions, set the initial position to be a unit step away from the origin
-        with orientation as the identity.  Generate a single waypoint at the origin.
+        with orientation as the identity. Generate one other waypoint at the origin.
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        
         """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
@@ -85,10 +135,22 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_angular_step_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_angular_step_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
         """
+        Generate Angular Unit Step Tasks
+
         For x,y,z directions, set the initial orientation to be a step away from the identity orientation.
         Generate a single waypoint at the origin.
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+
         """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
@@ -113,10 +175,22 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_straight_away_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_straight_away_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
         """
+        Generate Linear Straight-Away Tasks
+
         For x,y,z directions, start at 5m away from the origin with orientation as the identity.
-        Generate a single waypoint at the origin.
+        Generate one other waypoint at the origin.
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+            s
         """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
@@ -143,9 +217,18 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_figure_eight_tasks(params, root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME):
+    def generate_figure_eight_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
         """
-        For x,y,z directions, generate waypoints in figure eight patterns
+        For x,y,z directions, generate waypoints in various figure eight patterns.s
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
         """
         param_grid = get_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
@@ -159,7 +242,7 @@ class Tasks:
                     header = ["x", "y", "z"]
                     csv_writer.writerow(header)
 
-                    num_wpts = int(DEFAULT_T / res**2)
+                    num_wpts = 1000
                     t = np.linspace(0, DEFAULT_T, num=num_wpts)
                     long_axis = np.cos(r*t)
                     short_axis = 0.5 * np.sin(r*t) * long_axis
@@ -176,15 +259,27 @@ class Tasks:
         return
 
     @staticmethod
-    def generate_tasks(root=DEFAULT_ROOT, dataset_name=DEFAULT_DATASET_NAME, task_battery=DEFAULT_TASK_BATTERY):
+    def generate_tasks(
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME, 
+        task_battery=DEFAULT_TASK_BATTERY):
+        """
+        Generate All Tasks for a given TaskBattery
+
+        Parameters:
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+            - task_battery: str - The TaskBattery
+
+        """
         # Make the dataset directory
         if os.path.exists(f"{root}{dataset_name}/waypoints/"):
             counter = 0
             while True:
-                if os.path.exists(f"{root}dataset{str(counter).zfill(3)}/waypoints/"):
+                if os.path.exists(f"{root}{dataset_name[:-3]}{str(counter).zfill(3)}/waypoints/"):
                     counter += 1
                 else:
-                    dataset_name = f"dataset{str(counter).zfill(3)}"
+                    dataset_name = f"{dataset_name[:-3]}{str(counter).zfill(3)}"
                     break
         os.makedirs(f"{root}{dataset_name}/waypoints/")
 
@@ -198,7 +293,8 @@ class Tasks:
         # Save the dataset parameters
         with open(f"{root}{dataset_name}/{dataset_name}.json", "w") as f:
             json.dump(battery, f, indent="\t")
-
+        
+        return dataset_name
 
 ######################## UTILITY FUNCTION ########################
 ##################################################################
@@ -206,7 +302,11 @@ class Tasks:
 
 def get_param_grid(params):
     """
-    Get the grid of parameters we'd like to create taskcases for
+    Create a grid of all combinations of list-based parameters
+
+    Parameters:
+        - params: dict() - parameter dictionary for generating tasks
+        
     """
     param_spaces = [v for k, v in sorted(params.items(), key=lambda x: x[0]) if k not in TRAJECTORY_PARAMS]
     return product(*param_spaces)
