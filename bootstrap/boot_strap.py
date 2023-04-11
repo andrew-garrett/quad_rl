@@ -1,15 +1,15 @@
 #################### IMPORTS ####################
 #################################################
 
-import argparse
-import threading
-import concurrent.futures
+
 import sys
 # setting path
 sys.path.append('..\\quad_rl')
+import argparse
+import threading
 import bootstrap.task_battery as task_battery
 from bootstrap.task_gen import Tasks
-from bootstrap.utils import upload2drive
+from bootstrap.utils import cleanup
 from traj_gen import *
 import traj_track
 
@@ -70,7 +70,7 @@ def collect_bootstrap_data(
         for traj in trajectories_by_task[task_group]["generated_trajectories"]:
             traj_track.run(traj, gui=VERBOSE, plot=VERBOSE)
 
-    upload2drive(ROOT, DATASET_NAME)
+    cleanup(ROOT, DATASET_NAME)
 
     return
 
