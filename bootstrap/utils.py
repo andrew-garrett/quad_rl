@@ -4,9 +4,8 @@
 
 import os
 import json
+import shutil
 from zipfile import ZipFile
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -24,20 +23,19 @@ DEFAULT_TASK_NAME = "linear_step.csv"
 ###################################################################
 
 
-def upload2drive(root, dataset_name):
+def cleanup(root, dataset_name):
+    """
+    Zip a dataset and delete the uncompressed folder
+    """
     data_root = f"{root}{dataset_name}"
     with ZipFile(f"{data_root}.zip", "w") as zip_object:
         for folder, sub_folders, f_names in os.walk(data_root):
             for f_name in f_names:
                 f_path = os.path.join(folder, f_name)
-                zip_object.write(f_path, os.path.basename(f_path))
+                zip_object.write(f_path, f_path[len(data_root):])
     
     if os.path.exists(f"{data_root}.zip"):
-        gauth = GoogleAuth()
-        drive = GoogleDrive(gauth)
-        gfile = drive.CreateFile({"parents": [{"id": "asdfghjkl"}]})
-        gfile.SetContentFile(f"{data_root}.zip")
-        gfile.Upload()
+        shutil.rmtree(data_root)
         return True
     else:
         return False
