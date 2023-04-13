@@ -4,6 +4,8 @@
 
 import json
 from collections import namedtuple
+import xml.etree.ElementTree as etxml
+import pkg_resources
 import numpy as np
 try:
     import cupy as cp
@@ -27,7 +29,7 @@ def get_mppi_config(config_fpath="./mppi/configs/mppi_config.json"):
         - config_fpath: str - the filepath of the desired config file
 
     Returns:
-        - mppi_config: NamedTuple() - the config object
+        - mppi_config: namedtuple() - the mppi config object
     """
     with open(config_fpath, "r") as f:
         config_dict = json.load(f)
@@ -38,12 +40,63 @@ def get_mppi_config(config_fpath="./mppi/configs/mppi_config.json"):
         config_dict["Q"] = np.diag(config_dict["Q"])
         config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
         config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
-        
+        config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
+        # Get URDF parameters
+        config_dict["CF2X"] = parseURDFParameters()
+
     mppi_config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return mppi_config
 
+def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
+    """
+    Loads parameters from the URDF file.
+
+    This is almost identical to the one in the BaseAviary class
+
+    Parameters:
+        - urdf_fpath: str - the filepath of the desired urdf config file
+
+    Returns:
+        - cf2x_config: namedtuple() - the urdf config object
+    """
+    URDF_TREE = etxml.parse(urdf_fpath).getroot()
+    M = float(URDF_TREE[1][0][1].attrib['value'])
+    L = float(URDF_TREE[0].attrib['arm'])
+    THRUST2WEIGHT_RATIO = float(URDF_TREE[0].attrib['thrust2weight'])
+    IXX = float(URDF_TREE[1][0][2].attrib['ixx'])
+    IYY = float(URDF_TREE[1][0][2].attrib['iyy'])
+    IZZ = float(URDF_TREE[1][0][2].attrib['izz'])
+    J = np.diag([IXX, IYY, IZZ])
+    J_INV = np.linalg.inv(J)
+    KF = float(URDF_TREE[0].attrib['kf'])
+    KM = float(URDF_TREE[0].attrib['km'])
+    COLLISION_H = float(URDF_TREE[1][2][1][0].attrib['length'])
+    COLLISION_R = float(URDF_TREE[1][2][1][0].attrib['radius'])
+    COLLISION_SHAPE_OFFSETS = [float(s) for s in URDF_TREE[1][2][0].attrib['xyz'].split(' ')]
+    COLLISION_Z_OFFSET = COLLISION_SHAPE_OFFSETS[2]
+    MAX_SPEED_KMH = float(URDF_TREE[0].attrib['max_speed_kmh'])
+    GND_EFF_COEFF = float(URDF_TREE[0].attrib['gnd_eff_coeff'])
+    PROP_RADIUS = float(URDF_TREE[0].attrib['prop_radius'])
+    DRAG_COEFF_XY = float(URDF_TREE[0].attrib['drag_coeff_xy'])
+    DRAG_COEFF_Z = float(URDF_TREE[0].attrib['drag_coeff_z'])
+    DRAG_COEFF = np.array([DRAG_COEFF_XY, DRAG_COEFF_XY, DRAG_COEFF_Z])
+    DW_COEFF_1 = float(URDF_TREE[0].attrib['dw_coeff_1'])
+    DW_COEFF_2 = float(URDF_TREE[0].attrib['dw_coeff_2'])
+    DW_COEFF_3 = float(URDF_TREE[0].attrib['dw_coeff_3'])
+    
+    # Put these parameters into a dictionary
+    config_dict = locals()
+    # Remove unneccesary values
+    config_dict.pop("URDF_TREE")
+    config_dict.pop("urdf_fpath")
+    # Return a namedtuple
+    cf2x_config = namedtuple("CF2X", config_dict.keys())(**config_dict)
+    return cf2x_config
+
 
 """
+MPPI_CONFIG PARAMETERS AND DEFAULT VALUES:
+
 HOVER_RPM = 14468.429 # ============================================== RPM @ HOVER, NOMINAL CONTROL
 U_NOMINAL = [HOVER_RPM, HOVER_RPM, HOVER_RPM, HOVER_RPM] # =========== NOMINAL CONTROL (HOVERING)
 
@@ -55,6 +108,7 @@ U_SIGMA_ARR = np.linalg.inv(U_SIGMA * np.eye(U_SPACE)) =============== CONTROL-C
 K = 512 # ============================================================ NUMBER OF TRAJECTORIES TO SAMPLE
 T_HORIZON = 2.5 # ==================================================== TIME HORIZON
 FREQUENCY = 48 # ===================================================== CONTROL FREQUENCY
+DT = 1.0 / FREQUENCY # =============================================== TIMESTEP SIZE
 T = int(T_HORIZON*FREQUENCY) # ======================================= NUMBER OF TIMESTEPS
 
 TEMPERATURE = 1. # =================================================== TEMPERATURE
@@ -79,12 +133,15 @@ class MPPI:
         # Set MPPI Parameters
         self.config = config
 
+        # Functional Dynamics Model
         try:
-            self.F = getattr(dynamics_models, self.config.DYNAMICS_MODEL)(self.config) # Functional Dynamics Model
+            self.F = getattr(dynamics_models, self.config.DYNAMICS_MODEL)(self.config)
         except:
             self.F = dynamics_models.DynamicsModel(self.config)
+        
+        # Functional Cost Model
         try:
-            self.S = getattr(cost_models, self.config.COST_MODEL)(self.config) # Functional Cost Model
+            self.S = getattr(cost_models, self.config.COST_MODEL)(self.config)
         except:
             self.S = cost_models.CostModel(self.config)
 
