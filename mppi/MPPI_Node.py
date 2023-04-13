@@ -1,87 +1,68 @@
+#################### IMPORTS ####################
+#################################################
+
+
+import json
+from collections import namedtuple
 import numpy as np
-import cupy as cp
+try:
+    import cupy as cp
+except:
+    print("cupy not available")
+from scipy.signal import savgol_filter
 
-
-
+import dynamics_models
+import cost_models
 
 
 #################### MPPI PARAMETERS ####################
 #########################################################
 
-HOVER_RPM = 14468.429 # ================= RPM @ HOVER, NOMINAL CONTROL
 
-X_SPACE = 12 # ========================== STATE SPACE (x,y,z, r,p,y, v_x,v_y,v_z, w_x,w_y,w_z)
-U_SPACE = 4 # =========================== CONTROL SPACE
-U_SIGMA = 10. # ========================= CONTROL NOISE
+def get_mppi_config(config_fpath="./mppi/configs/mppi_config.json"):
+    """
+    Creates a config object for more concise parameter storage
 
-K = 512 # =============================== NUMBER OF TRAJECTORIES TO SAMPLE
-T_HORIZON = 2.5 # ======================= TIME HORIZON
-FREQUENCY = 48 # ======================== CONTROL FREQUENCY
-T = int(T_HORIZON*FREQUENCY) # ======= NUMBER OF TIMESTEPS
+    Parameters:
+        - config_fpath: str - the filepath of the desired config file
 
-TEMPERATURE = 1. # ====================== TEMPERATURE
-GAMMA = 1. # ============================ CONTROL COST PARAMETER
-ALPHA = 0.1 # =========================== NOMINAL CONTROL CENTERING PARAMETER
+    Returns:
+        - mppi_config: NamedTuple() - the config object
+    """
+    with open(config_fpath, "r") as f:
+        config_dict = json.load(f)
 
+        # Set derived/processed parameters
+        config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
+        config_dict["DTYPE"] = getattr(np, config_dict["DTYPE"])
+        config_dict["Q"] = np.diag(config_dict["Q"])
+        config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
+        config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
+        
+    mppi_config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
+    return mppi_config
 
-#################### FUNCTIONAL DYNAMICS MODEL ####################
-###################################################################
 
 """
-Our functional dynamics model is defined as follows:
+HOVER_RPM = 14468.429 # ============================================== RPM @ HOVER, NOMINAL CONTROL
+U_NOMINAL = [HOVER_RPM, HOVER_RPM, HOVER_RPM, HOVER_RPM] # =========== NOMINAL CONTROL (HOVERING)
 
-F: X_SPACE x U_SPACE -> X_SPACE
+X_SPACE = 12 # ======================================================= STATE SPACE (x,y,z, r,p,y, v_x,v_y,v_z, w_x,w_y,w_z)
+U_SPACE = 4 # ======================================================== CONTROL SPACE
+U_SIGMA = 10. # ====================================================== CONTROL NOISE
+U_SIGMA_ARR = np.linalg.inv(U_SIGMA * np.eye(U_SPACE)) =============== CONTROL-COST COVARIANCE
 
-X: the 12 dimensional state of the quadrotor
-U: the 4 dimensional control of the quadrotor (RPMs of each motor)
+K = 512 # ============================================================ NUMBER OF TRAJECTORIES TO SAMPLE
+T_HORIZON = 2.5 # ==================================================== TIME HORIZON
+FREQUENCY = 48 # ===================================================== CONTROL FREQUENCY
+T = int(T_HORIZON*FREQUENCY) # ======================================= NUMBER OF TIMESTEPS
 
-There are three stages to the dynamics model:
+TEMPERATURE = 1. # =================================================== TEMPERATURE
+GAMMA = 0.5 # ========================================================= CONTROL COST PARAMETER
+ALPHA = 0.1 # ======================================================== NOMINAL CONTROL CENTERING PARAMETER
+Q = np.eye(X_SPACE) # ================================================ STATE-COST COVARIANCE
 
-1. Preprocess state and control
-    a. State:
-        i. As described in "Learning Quadrotor Dynamics Using Neural Network for Flight Control", due to the singularities
-        of euler angles, we instead pass the sin() and cos() of the euler angles to the dynamics model.
-        ii. Additionally, we also remove the position from the state
-    b. Control:
-        i. It may be advantageous to preprocess the controls such that they are in the form (total thrust, body_moments)
-
-2. Compute dynamics update
-    a. The core dynamics model computes the linear and angular accelerations of the quadrotor
-        i. With the above preprocessing, the input to the dynamics model is (sin(euler_angles), cos(euler_angles), linear velocity, angular velocity, control)
-
-3. Postprocess state
-    a. Since the dynamics model computes linear and angular accelerations, we must postprocess to obtain the state of the desired shape
-        i. Using kinematics, compute (delta_x, delta_euler_angles, delta_linear_velocity, delta_angular_velocity)
-        ii. Apply the delta to the initial state
-
-"""
-
-
-#################### FUNCTIONAL COST MODEL ####################
-###############################################################
-
-"""
-Our functional cost model is defined as follows:
-
-J: X_SPACE x U_SPACE x U_SPACE -> R
-
-X: the 12 dimensional state of the quadrotor
-U: the 4 dimensional control of the quadrotor (RPMs of each motor)
-
-The cost model has a state-dependent cost and a control-dependent cost.
-
-1. State-Dependent Cost:
-    a. c(x) = (x - x_des)^T @ Q @ (x - x_des) + (10e6)*C
-        i. Essentially, we determine the noisy deviation of the current state from the desired state.
-        ii. Q is the state-cost covariance matrix, which is just the identity matrix
-        iii. C is an indicator variable for if the current state is a collision with an obstacle
-
-2. Control-Dependent Cost:
-    a. d(u, v) = lambda*(u^T @ Sigma^-1 @ v)
-        i. Lambda is the temperature used to weight the control term
-        ii. Sigma is the control-cost covariance matrix, which is defined by some desired noise variance
-        iii. u is the current optimal control, while v is the perturbed optimal control
-
+DTYPE = np.float32 # ================================================= DATATYPE (np.float32 or np.float64)
 """
 
 
@@ -93,33 +74,25 @@ class MPPI:
     """
     Class to perform MPPI Algorithm
     """
-    def __init__(self) -> None:
-        #################### Set MPPI Parameters
-        # Dynamics Model Parameters
-        self.X_SPACE = X_SPACE
-        self.U_SPACE = U_SPACE
-        self.U_SIGMA = U_SIGMA
-        self.U_SIGMA_ARR = self.U_SIGMA * np.eye(self.U_SPACE)
-        self.U_NOMINAL = HOVER_RPM * np.ones(self.U_SPACE)
-        self.F = ... # Functional Dynamics Model
+    def __init__(self, config) -> None:
 
-        # Samping Parameters
-        self.K = K
-        self.T_HORIZON = T_HORIZON
-        self.FREQUENCY = FREQUENCY
-        self.T = int(self.T_HORIZON*self.FREQUENCY)
-        self.SAMPLE_X = np.zeros((self.K, self.X_SPACE))
-        
-        # Cost Model Parameters
-        self.TEMPERATURE = TEMPERATURE
-        self.GAMMA = GAMMA
-        self.ALPHA = ALPHA
-        self.COST_MAP = np.zeros(self.K)
-        self.S = ... # Functional Cost Model
+        # Set MPPI Parameters
+        self.config = config
 
-        # Quality of Life Parameters
-        self.U = self.U_NOMINAL
+        try:
+            self.F = getattr(dynamics_models, self.config.DYNAMICS_MODEL)(self.config) # Functional Dynamics Model
+        except:
+            self.F = dynamics_models.DynamicsModel(self.config)
+        try:
+            self.S = getattr(cost_models, self.config.COST_MODEL)(self.config) # Functional Cost Model
+        except:
+            self.S = cost_models.CostModel(self.config)
 
+        # Pre-allocate data structures
+        self.COST_MAP = np.zeros(self.config.K, dtype=self.config.DTYPE)
+        self.SAMPLES_X = np.zeros((self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
+        self.U = np.zeros((self.config.T, self.config.U_SPACE), dtype=self.config.DTYPE)
+        self.U[:] = self.config.U_NOMINAL
 
     def compute_weights(self):
         """
@@ -130,9 +103,8 @@ class MPPI:
         """
         rho = np.min(self.COST_MAP)
         min_normed_cost_map = self.COST_MAP - rho
-        eta_tilde = np.sum(np.exp((-self.TEMPERATURE**-1)*(min_normed_cost_map)))
-        weights = (eta_tilde**-1)*np.exp((-self.TEMPERATURE**-1)*min_normed_cost_map)
-        return weights
+        weights = np.exp(-(self.config.TEMPERATURE**-1)*min_normed_cost_map)
+        return weights / np.sum(weights)
     
     def smooth_controls(self, weights, du):
         """
@@ -142,10 +114,15 @@ class MPPI:
             - weights: np.array(K) - the importance sampling weights
             - du: np.array(K, T, U_SPACE) - the control perturbations
         """
-        # sav_gol_filter()
-        pass
+        weighted_samples = du.T @ weights
+        self.U += savgol_filter(
+            weighted_samples.T, 
+            window_length=int(np.sqrt(self.config.K)), 
+            polyorder=7, 
+            axis=0
+        )
 
-    def mppi_iter(self, state):
+    def mppi_iter(self, state, desired_state):
         """
         Perform an iteration of MPPI
 
@@ -155,38 +132,65 @@ class MPPI:
         Returns:
             - next_control: np.array(U_SPACE) - the next optimal control to execute
         """
-
         # sample random control perturbations
-        du = cp.random.normal(loc=0., scale=self.U_SIGMA, size=(self.K, self.T, self.U_SPACE), dtype=np.float32)
+        try:
+            du = cp.asnumpy(
+                cp.random.normal(
+                    loc=0., 
+                    scale=self.config.U_SIGMA, 
+                    size=(self.config.K, self.config.T, self.config.U_SPACE), 
+                    dtype=self.config.DTYPE
+                )
+            )
+        except:
+            du = np.random.normal(
+                loc=0., 
+                scale=self.config.U_SIGMA, 
+                size=(self.config.K, self.config.T, self.config.U_SPACE)
+            )
         
         # prepare to sample in parallel
-        self.SAMPLE_X[:] = state
+        self.SAMPLES_X[:] = state
 
         # iteratively sample T-length trajectories, K times in parallel
-        for t in range(1, self.T+1):
+        for t in range(1, self.config.T+1):
             # Get the current optimal control
             u_tm1 = self.U[t-1]
             # Perturb the current optimal control
             v_tm1 = u_tm1 + du[:, t-1, :]
             # Approximate the next state for the perturbed optimal control
-            self.SAMPLE_X = F(self.SAMPLE_X, v_tm1.reshape((self.K, self.U_SPACE)))
+            self.SAMPLES_X = self.F(self.SAMPLES_X, v_tm1)
             # Compute the cost of taking the perturbed optimal control
-            self.COST_MAP += self.compute_cost(self.SAMPLE_X, u_tm1, v_tm1)
+            self.COST_MAP += self.S(self.SAMPLES_X, desired_state, u_tm1, v_tm1)
 
         # Compute the importance sampling weights
         weights = self.compute_weights()
 
         # Compute the smoothed control, weighted by importance sampling
-        self.U += self.smooth_controls(weights, du)
+        self.smooth_controls(weights, du)
 
         # Get the next control
         next_control = self.U[0]
         
         # Roll the controls
         self.U = np.roll(self.U, shift=-1, axis=0)
-        self.U[-1] = self.U_NOMINAL
+        self.U[-1] = self.config.U_NOMINAL
 
         return next_control
     
 
 
+if __name__ == "__main__":
+
+    mppi_config = get_mppi_config()
+    mppi_node = MPPI(mppi_config)
+
+    # test an iteration of MPPI
+
+    x0 = np.zeros(mppi_config.X_SPACE, dtype=mppi_config.DTYPE)
+    x0[2] = 1.
+    xdes = np.zeros_like(x0, dtype=mppi_config.DTYPE)
+    xdes[2] = 2.
+
+    next_control = mppi_node.mppi_iter(x0, xdes)
+    print(next_control)
