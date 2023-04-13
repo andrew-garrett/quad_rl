@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torchvision import MLP
+from torchvision.ops import MLP
 
 activations = {
     "tanh": nn.Tanh,
@@ -8,12 +8,12 @@ activations = {
     "sigmoid": nn.Sigmoid
 }
 
-class MLP(nn.Module):
+class DynamicsNet(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.input_size = self.config["model"]["state_dim"] + self.config["model"]["control_dim"]
-        self.output_size = self.config["model"]["state_dim"]
+        self.output_size = self.config["model"]["accel_dim"]
         self.layers = self.config["model"]["hidden_layers"] + [self.output_size]
 
         self.net = MLP(

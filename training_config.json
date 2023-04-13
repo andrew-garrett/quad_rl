@@ -1,13 +1,20 @@
 {
+    "dataset": {
+        "name": "AGGRO_000",
+        "num_drones": 27
+    },
     "model": {
-        "state_dim": 12,
-        "control_dim": 4,
+        "state_dim": 19,
+        "control_dim": 15,
+        "accel_dim": 6,
         "hidden_layers": [32, 32],
         "activation": "tanh",
         "dropout": 0.0
     },
     "training": {
         "optimizer": "rmsprop",
+        "loss_fn": "mse",
+        "batch_size": 64,
         "lr": 0.001,
         "weight_decay": 0.0001
     }

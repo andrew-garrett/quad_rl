@@ -40,6 +40,22 @@ To view training results, in either a separate terminal or after running the abo
 tensorboard --logdir ./results
 ```
 
+# Dynamics Model Training
+
+First, please use pip to install torch, torchvision, and pytorch-lightning in your conda environment
+
+Then, create a torch dataset by running:
+
+```
+python torch_dataset_gen.py --dataset_path path/to/dataset/root/dir
+```
+
+Then, after accordingly setting parameters in training_config.json, run training:
+
+```
+python train_dynamics_model.py
+```
+
 # TODO:
 
  - [] Figure out tensorboard vs. wandb results tracking
