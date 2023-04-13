@@ -84,6 +84,8 @@ def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
     DW_COEFF_2 = float(URDF_TREE[0].attrib['dw_coeff_2'])
     DW_COEFF_3 = float(URDF_TREE[0].attrib['dw_coeff_3'])
     
+    # Include MAX_RPM
+    MAX_RPM = 21702.644
     # Put these parameters into a dictionary
     config_dict = locals()
     # Remove unneccesary values
