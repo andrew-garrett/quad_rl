@@ -38,7 +38,7 @@ def get_mppi_config(config_fpath="./mppi/configs/mppi_config.json"):
         config_dict["Q"] = np.diag(config_dict["Q"])
         config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
         config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
-
+        
     mppi_config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return mppi_config
 

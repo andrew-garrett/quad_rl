@@ -67,5 +67,5 @@ class DynamicsModel:
         new_state = np.random.standard_normal(size=(self.config.K, self.config.X_SPACE))
         return new_state
 
-    def __call__(self, state, u):
+    def __call__(self, state, u, dt):
         return self.postprocess(self.step_dynamics(self.preprocess(state, u)))
