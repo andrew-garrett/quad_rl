@@ -96,7 +96,7 @@ class AnalyticalModel(DynamicsModel):
         """Go from control in terms or RPM to control u_1 (eq 10) and u_2 (eq 16)"""
         F, M = self.motorModel(u) #get forces and moments from motor model
         u1 = np.sum(F) #eq 10
-        u2 = np.array([self.config.CF2X.L*(F[1] - F[4]), self.config.CF2X.L*(F[2] - F[0]), M[0] - M[1] + M[2] - M[3]]) #Eq (14, 16)
+        u2 = np.array([self.config.CF2X.L*(F[1] - F[3]), self.config.CF2X.L*(F[2] - F[0]), M[0] - M[1] + M[2] - M[3]]) #Eq (14, 16)
         return state, u1, u2 
 
     def step_dynamics(self, input):
@@ -106,13 +106,12 @@ class AnalyticalModel(DynamicsModel):
         """
         state, u1, u2 = input # Decompose input
         xyz, rpy, velo, omega = state[:3], state[3:6], state[6:9], state[9:] #Decompose state
-        F_ti, M_i = self.motorModel(u) #Get forces and moments due to control 
 
         #Coordinate transformation from drone frame to world frame, can use inverse of orientation
         w_R_d = Rotation.from_euler(('xyz'), rpy).inv().as_matrix() 
 
         # ---- Position, F = m*a ----
-        f_g = self.config.CF2X.GRAVITY #force due to gravity 
+        f_g = np.array([0, 0, -1*self.config.CF2X.GRAVITY]) #force due to gravity 
         f_thrust = w_R_d @ np.array([0, 0, u1]) #force due to thrust, rotated into world frame
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
@@ -120,7 +119,7 @@ class AnalyticalModel(DynamicsModel):
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
-        omega_dot = self.config.CF2X.J_inv @ (u2 - np.cross(omega, self.config.CF2X.J @ omega))
+        omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(omega, self.config.CF2X.J @ omega))
 
         return state, accel, omega_dot
     
@@ -141,3 +140,5 @@ class AnalyticalModel(DynamicsModel):
         
         #format in shape of state and return 
         return np.hstack((xyz_dt, rpy_dt, velo_dt, omega_dt))
+
+
