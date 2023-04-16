@@ -13,8 +13,8 @@ import numpy as np
 import torch
 from scipy.signal import savgol_filter
 
-import dynamics_models
-import cost_models
+import mppi.dynamics_models
+import mppi.cost_models
 
 
 #################### MPPI PARAMETERS ####################
@@ -84,8 +84,10 @@ def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
     DW_COEFF_2 = float(URDF_TREE[0].attrib['dw_coeff_2'])
     DW_COEFF_3 = float(URDF_TREE[0].attrib['dw_coeff_3'])
     
-    # Include MAX_RPM
+    # Include MAX_RPM and HOVER_RPM
     MAX_RPM = 21702.644
+    GRAVITY = 9.8*M
+    HOVER_RPM = np.sqrt(GRAVITY / (4*KF))
     # Put these parameters into a dictionary
     config_dict = locals()
     # Remove unneccesary values
