@@ -78,12 +78,7 @@ class TrajectoryGenerator:
         """
 
         if "figure_eight" in self.task_name:
-            # try:
-            # try rdp filtering
-            self.points = self.rdp_filtering(self.path)#np.vstack((self.rdp_filtering(self.path[:-1]), self.path[-1]))
-            # except:
-            #     # if that fails, linearly downsample
-            #     self.points = np.vstack((self.path[0, :], self.path[1:-1:5, :], self.path[-1, :]))
+            self.points = self.rdp_filtering(self.path)
         else:
             self.points = np.vstack((self.path[0, :], self.path[1:-1:5, :], self.path[-1, :]))
         self.points = np.around(self.points, 10) # round the precision of waypoints for quality of life
@@ -214,7 +209,7 @@ class BSplineTrajectoryGenerator(TrajectoryGenerator):
         self.spline_order = 5
         self.spline_path = [
             make_interp_spline(
-                self.t_start_vec, # CHANGE MADE
+                self.t_start_vec,
                 self.points[:, i],
                 k=self.spline_order,
                 bc_type=(
@@ -268,9 +263,6 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
     ):
         super().__init__(config, root, task_name)
 
-        # total dispacement
-        self.disp_horizon = np.sum(self.disp_vecs, axis=0)
-
         # minimum snap
         num_coef = 8 * (self.n_wpts - 1)  # unknown c to solve for every segments
         A = np.zeros((num_coef, num_coef))
@@ -288,14 +280,13 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         # update the matrix for each segment
         for i in range(self.n_wpts - 1):
             t_i, t = self.t_start_vec[i], self.t_segment_vec[i]
-            temp = t # / self.T_horizon # scale time segments by total time
             # end points
             if i == self.n_wpts - 2:
                 A[num_coef - 4:num_coef, num_coef - 8:num_coef] = np.array([
-                    [temp**7, temp**6, temp**5, temp**4, temp**3, temp**2, temp, 1],
-                    [7 * temp**6, 6 * temp**5, 5 * temp**4, 4 * temp**3, 3 * temp**2, 2 * temp, 1, 0],
-                    [42 * temp**5, 30 * temp**4, 20 * temp**3, 12 * temp**2, 6 * temp, 2, 0, 0],
-                    [210 * temp**4, 120 * temp**3, 60 * temp**2, 24 * temp, 6, 0, 0, 0]])
+                    [t**7, t**6, t**5, t**4, t**3, t**2, t, 1],
+                    [7 * t**6, 6 * t**5, 5 * t**4, 4 * t**3, 3 * t**2, 2 * t, 1, 0],
+                    [42 * t**5, 30 * t**4, 20 * t**3, 12 * t**2, 6 * t, 2, 0, 0],
+                    [210 * t**4, 120 * t**3, 60 * t**2, 24 * t, 6, 0, 0, 0]])
                 b[num_coef - 4] = self.points[i + 1]
 
             # points between start and end
@@ -303,7 +294,7 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
                 # total 8 rows
                 # position constraints x1(t1) = x2(t1) = x1 2*
                 A[index, 8 * i: 8 * (i + 1)] = np.array(
-                    [[temp**7, temp**6, temp**5, temp**4, temp**3, temp**2, temp, 1]])
+                    [[t**7, t**6, t**5, t**4, t**3, t**2, t, 1]])
                 A[index + 1, 8 * (i + 1): 8 * (i + 2)] = np.array([[0, 0, 0, 0, 0, 0, 0, 1]])
 
                 b[index] = self.points[i + 1]
@@ -312,32 +303,32 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
                 # continuity constrain x1'(t1) = x2'(t1) 6*
                 # velocity
                 A[index + 2, 8 * i: 8 * (i + 2)] = np.array(
-                    [[7 * temp**6, 6 * temp**5, 5 * temp**4, 4 * temp**3, 3 * temp**2, 2 * temp, 1, 0,
+                    [[7 * t**6, 6 * t**5, 5 * t**4, 4 * t**3, 3 * t**2, 2 * t, 1, 0,
                       0, 0, 0, 0, 0, 0, -1, 0]])
 
                 # acceleration
                 A[index + 3, 8 * i: 8 * (i + 2)] = np.array([
-                    [42 * temp**5, 30 * temp**4, 20 * temp**3, 12 * temp**2, 6 * temp, 2, 0, 0,
+                    [42 * t**5, 30 * t**4, 20 * t**3, 12 * t**2, 6 * t, 2, 0, 0,
                      0, 0, 0, 0, 0, -2, 0, 0]])
 
                 # jerk
                 A[index + 4, 8 * i: 8 * (i + 2)] = np.array([
-                    [210 * temp**4, 120 * temp**3, 60 * temp**2, 24 * temp, 6, 0, 0, 0,
+                    [210 * t**4, 120 * t**3, 60 * t**2, 24 * t, 6, 0, 0, 0,
                      0, 0, 0, 0, -6, 0, 0, 0]])
 
                 # snap
                 A[index + 5, 8 * i: 8 * (i + 2)] = np.array([
-                    [840 * temp**3, 360 * temp**2, 120 * temp, 24, 0, 0, 0, 0,
+                    [840 * t**3, 360 * t**2, 120 * t, 24, 0, 0, 0, 0,
                      0, 0, 0, -24, 0, 0, 0, 0]])
 
                 # crackle
                 A[index + 6, 8 * i: 8 * (i + 2)] = np.array([
-                    [2520 * temp**2, 720 * temp, 120, 0, 0, 0, 0, 0,
+                    [2520 * t**2, 720 * t, 120, 0, 0, 0, 0, 0,
                      0, 0, -120, 0, 0, 0, 0, 0]])
 
                 # pop
                 A[index + 7, 8 * i: 8 * (i + 2)] = np.array([
-                    [5040 * temp, 720, 0, 0, 0, 0, 0, 0,
+                    [5040 * t, 720, 0, 0, 0, 0, 0, 0,
                      0, -720, 0, 0, 0, 0, 0, 0]])
 
                 index += 8
@@ -365,7 +356,7 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
             self.is_done = True
         else:
-            t_s = float(t - self.t_start_vec[last_tstart_ind]) # / self.T_horizon
+            t_s = float(t - self.t_start_vec[last_tstart_ind])
             c = self.c[last_tstart_ind]
             if t == 0:
                 x = self.points[0]
