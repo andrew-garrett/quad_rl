@@ -5,7 +5,6 @@ import os
 import numpy as np
 import glob
 import argparse
-from copy import deepcopy
 import torch
 from sklearn.model_selection import train_test_split
 from scipy.spatial.transform import Rotation
@@ -64,20 +63,23 @@ def run(
             future_timestamps = future_timestamps.reshape(-1)
 
             ### PROCESS STATES ###
-            rpy = states[:,3:6]
+            rpy = states[:,6:9]
             sin_rpy = np.sin(rpy)
             cos_rpy = np.cos(rpy)
-            states_proc = np.concatenate([states[:,:3], sin_rpy, cos_rpy, states[:,6:]], axis=1)
+            # excluding position
+            states_proc = np.concatenate([sin_rpy, cos_rpy, states[:,3:6], states[:, 9:]], axis=1)
 
             ### PROCESS ACTIONS ###
-            rpy = actions[:,3:6]
+            rpy = actions[:,6:9]
             sin_rpy = np.sin(rpy)
             cos_rpy = np.cos(rpy)
-            actions_proc = np.concatenate([actions[:,:3], sin_rpy, cos_rpy, actions[:,6:]], axis=1)
+            actions_proc = np.concatenate([sin_rpy, cos_rpy, actions[:,3:6], actions[:, 9:]], axis=1)
 
             ### COMPUTE TARGETS ###
             dt = future_timestamps - timestamps
-            targets = (future_states[:,6:12] - states[:,6:12]) / np.expand_dims(dt, axis=1)
+            lin_targets = (future_states[:,3:6] - states[:,3:6]) / np.expand_dims(dt, axis=1)
+            rot_targets = (future_states[:,3:6] - states[:,3:6]) / np.expand_dims(dt, axis=1)
+            targets = np.hstack((lin_targets, rot_targets))
 
             all_states.append(torch.tensor(states_proc))
             all_actions.append(torch.tensor(actions_proc))

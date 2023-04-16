@@ -4,8 +4,8 @@
         "num_drones": 27
     },
     "model": {
-        "state_dim": 19,
-        "control_dim": 15,
+        "state_dim": 14,
+        "control_dim": 14,
         "accel_dim": 6,
         "hidden_layers": [32, 32],
         "activation": "tanh",

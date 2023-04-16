@@ -3,9 +3,12 @@ import os
 import json
 import argparse
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from training.lightning import DynamicsLightningModule
+
+wandb_logger = WandbLogger()
 
 def load_config(config_path):
     with open(config_path) as f:
@@ -46,7 +49,8 @@ def build_trainer_module(config, experiment_dir, epochs):
         devices=1,
         max_epochs=epochs,
         default_root_dir=weights_dir,
-        callbacks=[checkpoint_callback]
+        callbacks=[checkpoint_callback],
+        logger=wandb_logger
     )
     module = DynamicsLightningModule(config, log_dir)
     return trainer, module
