@@ -5,12 +5,10 @@
 import os
 import csv
 from copy import deepcopy
-from tqdm import tqdm
 from itertools import product
 import numpy as np
 from scipy.interpolate import make_interp_spline
 from scipy.sparse.linalg import lsmr
-from scipy.optimize import minimize
 
 from bootstrap.task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT, DEFAULT_TASK_BATTERY
 from bootstrap.utils import collect_task_trajectory, get_task_params, plot_trajectories_by_task
@@ -33,7 +31,7 @@ class TrajectoryGenerator:
     Base Trajectory Generator Class (Implements Constant Speed Trajectory)
     """
     def __init__(self, 
-                 params, 
+                 config, 
                  root=DEFAULT_ROOT, 
                  task_name=DEFAULT_TASK_NAME
     ):
@@ -41,76 +39,65 @@ class TrajectoryGenerator:
         Important variables/dimensions
         self.path           [N, 3]
         self.points         [self.n_wpts, 3]
-        self.d_vecs         [self.n_wpts,]
+        self.disp_vecs      [self.n_wpts, 3]
+        self.dist_vec       [self.n_wpts,]
         self.unit_vecs      [self.n_wpts, 3]
-        self.t_start_vec    [self.n_wpts,1] or [self.n_wpts,]
-        
+        self.t_start_vec    [self.n_wpts,]
+        self.t_segment_vec  [self.n_wpts - 1,]
         """
         self.root = root
         self.task_name = task_name
-        self.params = params
+        self.config = config
         with open(f"{root}waypoints/{task_name}.csv", "r", newline="\n") as f:
             self.path = np.vstack(([row for i, row in enumerate(csv.reader(f)) if i > 0])).astype("float")
 
         # Generate Sparse Waypoints (only for complex paths)
         self.filter_waypoints()
 
-        # Create time vector assuming constant speed trajectory
-        self.vel_vec = self.params["speed"] * self.unit_vecs
-        self.vel_vec[0] *= 0.5
-        self.vel_vec[-1] *= 0.5
-        try:
-            self.t_start_vec = np.hstack(
-                (np.zeros(1), np.cumsum(self.d_vecs / self.params["speed"], axis=0))
-            )
-        except:
-            self.t_start_vec = np.vstack(
-                (np.zeros(1), np.cumsum(self.d_vecs / self.params["speed"], axis=0))
-            )
+        # Create vector of start times of each waypoint, assuming constant speed trajectory
+        self.vel_vecs = self.config["speed"] * self.unit_vecs
+        self.speed_vec = np.linalg.norm(self.vel_vecs, axis=1)
+        self.t_start_vec = np.hstack(
+            (np.zeros(1), np.cumsum( self.dist_vec[:-1] / self.config["speed"], axis=0)) # self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))
+        )
+        self.T_horizon = self.t_start_vec[-1]
+        self.t_segment_vec = np.diff(self.t_start_vec) # Define length of time for each segment, hence size=(self.n_wpts-1,)
 
-        self.is_done = False
+        self.is_done = False # Indicator for task completion 
 
-        self.flat_output = { 'x': None, 'x_dot':None, 'x_ddot':None, 'x_dddot':None, 'x_ddddot':None,
-                        'yaw':None, 'yaw_dot':None}
+        # Pre-allocate the desired trajectory dictionary
+        self.flat_output = { 'x': None, 'x_dot': None, 'x_ddot': None, 'x_dddot': None, 'x_ddddot': None,
+                             'yaw': None, 'yaw_dot': None }
 
 
     def filter_waypoints(self):
         """
         Filter waypoints by:
-            1. linear downsampling
-            2. filtering by angle between consecutive downsampled waypoints
-
+            1. Ramer Douglas Peucker Algorithm
+            2. linear downsampling
         """
 
         if "figure_eight" in self.task_name:
-            try:
-                # try rdp filtering
-                self.points = self.rdp_filtering(self.path)
-            except:
-                # if that fails, linear downsample
-                self.points = self.path[::5, :]
+            # try:
+            # try rdp filtering
+            self.points = self.rdp_filtering(self.path)#np.vstack((self.rdp_filtering(self.path[:-1]), self.path[-1]))
+            # except:
+            #     # if that fails, linearly downsample
+            #     self.points = np.vstack((self.path[0, :], self.path[1:-1:5, :], self.path[-1, :]))
         else:
-            self.points = self.path
+            self.points = np.vstack((self.path[0, :], self.path[1:-1:5, :], self.path[-1, :]))
+        self.points = np.around(self.points, 10) # round the precision of waypoints for quality of life
+        self.points -= self.points[0] # normalize waypoints to the first point
         self.n_wpts = self.points.shape[0]
 
-        # d_vecs stores the (x,y,z) displacement between consecutive waypoints
-        self.d_vecs = np.array(
-            [
-                np.linalg.norm(self.points[i + 1, :] - self.points[i, :]).flatten()
-                if i < self.n_wpts - 1
-                else np.zeros(1)
-                for i in range(self.n_wpts)
-            ]
-        )
-        # unit_vecs stores the unit vector between consecutive waypoints
-        self.unit_vecs = np.array(
-            [
-                (self.points[i + 1, :] - self.points[i, :]) / self.d_vecs[i]
-                if i < self.n_wpts - 1
-                else np.zeros(3)
-                for i in range(self.n_wpts)
-            ]
-        )
+        # disp_vects stores the (x, y, z) DISPLACEMENTS between consectutive waypoints, size=(self.n_wpts,3)
+        self.disp_vecs = np.zeros((self.n_wpts, 3))
+        self.disp_vecs[:-1, :] = np.diff(self.points, n=1, axis=0)
+        # dist_vec stores the scalar DISTANCE between consecutive waypoints, size=(self.n_wpts,)
+        self.dist_vec = np.linalg.norm(self.disp_vecs, axis=1)
+        # unit_vecs stores the (x, y, z) UNIT VECTOR between consecutive waypoints, size=(self.n_wpts, 3)
+        self.unit_vecs = np.zeros_like(self.disp_vecs)
+        self.unit_vecs[:-1, :] = self.disp_vecs[:-1, :] / self.dist_vec[:-1].reshape(-1, 1)
 
 
     def rdp_filtering(self, points):
@@ -124,18 +111,19 @@ class TrajectoryGenerator:
             - filtered_waypoints: np.array(self.n_wpts, 3) - All (x, y, z) points in filtered path
 
         """
-        # Find maximum perpendicular distance from line formed along start and end of this segment
+        # Find maximum perpendicular distance from the line formed from the start to the end of this segment
         max_dist, max_ind = 0, 0
         v = points[-1] - points[0]
         v_norm = np.linalg.norm(v)
         orth_dists = np.linalg.norm(np.cross(points[1:-1] - points[0], v), axis=1) / v_norm
         max_dist, max_ind = np.max(orth_dists), np.argmax(orth_dists)
         
-        if (max_dist > self.params["rdp_threshold"]):
-            # Recursion
+        # If the maximum distance is greater than a threshold, we split the segment in two and recurse
+        if (max_dist > self.config["rdp_threshold"]):
+            # Recursion 
             return np.vstack((self.rdp_filtering(points[:max_ind])[:-1], self.rdp_filtering(points[max_ind:])))
         else:
-            # Base Case
+            # Base Case: if the maximum distance is less than or equal to the threshold, we keep only the endpoints
             return np.array([points[0], points[-1]])
 
 
@@ -151,25 +139,23 @@ class TrajectoryGenerator:
             state for the current timestamp
 
         """
-        # Find the last waypoint that was traversed via t and t_start_vec
-        t_diff = self.t_start_vec - t
-        last_tstart_ind = np.argwhere(t_diff <= 0)[-1, 0]
-        if last_tstart_ind == len(t_diff) - 1:
+        # If we are close to the final waypoint:
+        if t+0.25 >= self.T_horizon:
+            # Set the desired state to be stationary at the final waypoint
             x = self.points[-1]
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
-            self.is_done = True
+            self.is_done = True # Task is complete
         else:
-            t_progress = (t - self.t_start_vec[last_tstart_ind]) / (
-                self.t_start_vec[last_tstart_ind + 1]
-                - self.t_start_vec[last_tstart_ind]
-            )
+            # Otherwise, find the index of the last waypoint that was traversed via t and t_start_vec
+            t_diff = self.t_start_vec - t
+            last_tstart_ind = np.argwhere(t_diff <= 0)[-1, 0]
+            # Compute the relative progress through the segment, and use that to compute the desired position
+            t_progress = (t - self.t_start_vec[last_tstart_ind]) / self.t_segment_vec[last_tstart_ind]
             x = (
                 self.points[last_tstart_ind]
-                + t_progress
-                * self.d_vecs[last_tstart_ind]
-                * self.unit_vecs[last_tstart_ind]
+                + (t_progress * self.dist_vec[last_tstart_ind]) * self.unit_vecs[last_tstart_ind]
             )
-            x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) if i > 0 else self.vel_vec[last_tstart_ind] for i in range(4))
+            x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) if i > 0 else self.vel_vecs[last_tstart_ind] for i in range(4))
 
         yaw, yaw_dot = 0.0, 0.0
 
@@ -197,29 +183,18 @@ class TrajectoryGenerator:
         state = self.get_trajectory_state(t)
 
         for i, k in enumerate(self.flat_output.keys()):
-            if k == "x_dot":
-                # scale the velocity?
-                self.flat_output[k] = np.clip(state[i], -self.params["speed"], self.params["speed"])
-            else:
-                self.flat_output[k] = state[i]
+            # if k == "x_dot":
+            #     # scale the velocity?
+            #     speed = np.linalg.norm(state[i])
+            #     if speed > self.config["speed"]:
+            #         self.flat_output[k] = (self.config["speed"] / speed) * state[i]
+            #     else:
+            #         self.flat_output[k] = state[i]
+            # else:
+            #     self.flat_output[k] = state[i]
+            self.flat_output[k] = state[i]
 
         return self.flat_output.copy()
-    
-
-#################### HOVER TRAJECTORY GENERATOR ####################
-####################################################################
-
-
-# class HoverTrajectoryGenerator(TrajectoryGenerator):
-#     """
-#     Sub-class of TrajectoryGenerator to implement a stabilizing
-#     """
-#     def __init__(self, 
-#                  params, 
-#                  root=DEFAULT_ROOT, 
-#                  task_name=DEFAULT_TASK_NAME
-#     ):
-        
 
 
 #################### B-SPLINE TRAJECTORY GENERATOR ####################
@@ -231,20 +206,20 @@ class BSplineTrajectoryGenerator(TrajectoryGenerator):
     Sub-class of TrajectoryGenerator to implement a k-th order interpolating B-Spline
     """
     def __init__(self, 
-                 params, 
+                 config, 
                  root=DEFAULT_ROOT, 
                  task_name=DEFAULT_TASK_NAME
     ):
-        super().__init__(params, root, task_name)
+        super().__init__(config, root, task_name)
         self.spline_order = 5
         self.spline_path = [
             make_interp_spline(
-                self.t_start_vec[:-1].flatten(), 
-                self.points[:, i], axis=0,
+                self.t_start_vec, # CHANGE MADE
+                self.points[:, i],
                 k=self.spline_order,
                 bc_type=(
                     [(j, 0.0) for j in range(1, 3)], 
-                    [(j, 0.*self.params["speed"]) for j in range(1, 3)])) 
+                    [(j, 0.0) for j in range(1, 3)])) 
             for i in range(3)
         ]
         
@@ -258,14 +233,14 @@ class BSplineTrajectoryGenerator(TrajectoryGenerator):
             state for the current timestamp
 
         """
-        if np.any(np.isnan([self.spline_path[i](t, extrapolate=False) for i in range(3)])):
-            self.is_done = True
+        # If we are close to the final waypoint:
+        if np.any(np.isnan(np.array([self.spline_path[i](t+0.25, extrapolate=False) for i in range(3)]))):
+            # Set the desired state to be stationary at the end of the trajectory
             x = self.points[-1]
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
-        elif np.any(np.isnan(np.array([self.spline_path[i](t+0.5, extrapolate=False) for i in range(3)]))):
-            x = self.points[-1]
-            x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
+            self.is_done = True # Task is complete
         else:
+            # Otherwise, set the desired state to be that given by the continuous trajectory
             x, x_dot, x_ddot, x_dddot, x_ddddot  = (
                 np.array([
                     self.spline_path[i](t, nu=nu, extrapolate=False) 
@@ -287,11 +262,14 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
     Sub-class of TrajectoryGenerator to implement minimum snap trajectory generation
     """
     def __init__(self, 
-                 params, 
+                 config, 
                  root=DEFAULT_ROOT, 
                  task_name=DEFAULT_TASK_NAME
     ):
-        super().__init__(params, root, task_name)
+        super().__init__(config, root, task_name)
+
+        # total dispacement
+        self.disp_horizon = np.sum(self.disp_vecs, axis=0)
 
         # minimum snap
         num_coef = 8 * (self.n_wpts - 1)  # unknown c to solve for every segments
@@ -309,7 +287,8 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
 
         # update the matrix for each segment
         for i in range(self.n_wpts - 1):
-            temp = self.t_start_vec.flatten()[i] #/ self.t_start_vec.flatten()[-1]
+            t_i, t = self.t_start_vec[i], self.t_segment_vec[i]
+            temp = t # / self.T_horizon # scale time segments by total time
             # end points
             if i == self.n_wpts - 2:
                 A[num_coef - 4:num_coef, num_coef - 8:num_coef] = np.array([
@@ -363,21 +342,10 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
 
                 index += 8
 
-        # Cx = minimize(lambda x: np.sum(A@x - b[:, 0]), np.zeros(num_coef), options={"maxiter": 100}) #, method="SLSQP")
-        # Cy = minimize(lambda x: np.sum(A@x - b[:, 1]), np.zeros(num_coef), options={"maxiter": 100})
-        # Cz = minimize(lambda x: np.sum(A@x - b[:, 2]), np.zeros(num_coef), options={"maxiter": 100})
-        damping, atol, btol, maxiter = 0.1, 1e-5, 1e-4, 100000
-        Cx = lsmr(A, b[:, 0], damping=damping, atol=atol, btol=btol, maxiter=maxiter)
-        Cy = lsmr(A, b[:, 1], damping=damping, atol=atol, btol=btol, maxiter=maxiter)
-        Cz = lsmr(A, b[:, 2], damping=damping, atol=btol, btol=btol, maxiter=maxiter)
-        # if np.any([Cx[1] == 1, Cy[1] == 1, Cz[1] == 1]):
-        print("+++++++++++++++++++++++++++ MIN SNAP TRAJECTORY ")
-        print(self.task_name)
-        for c in [Cx, Cy, Cz]:
-            x, istop, itn, normr = c
-            print(f"stop_code: {istop}, after {itn} iteration, with error {normr}")
-        print()
-        print()
+        damp, atol, btol, maxiter = 0.01, 1e-8, 1e-8, 2500
+        Cx = lsmr(A, b[:, 0], damp=damp, atol=atol, btol=btol, maxiter=maxiter)
+        Cy = lsmr(A, b[:, 1], damp=damp, atol=atol, btol=btol, maxiter=maxiter)
+        Cz = lsmr(A, b[:, 2], damp=damp, atol=btol, btol=btol, maxiter=maxiter)
         self.c = np.hstack((Cx[0].reshape(len(A), 1), Cy[0].reshape(len(A), 1), Cz[0].reshape(len(A), 1))).reshape(-1, 8, 3)
 
         
@@ -392,18 +360,21 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         """
         t_diff = self.t_start_vec - t
         last_tstart_ind = np.argwhere(t_diff <= 0)[-1, 0]
-        if last_tstart_ind >= len(t_diff) - 1:
+        if t+0.25 >= self.T_horizon:
+            x = self.points[-1]
+            x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
             self.is_done = True
-            last_tstart_ind = len(t_diff) - 3
-        # else:
-        t_s = float(t - self.t_start_vec[last_tstart_ind]) #/ self.t_start_vec.flatten()[-1]
-        c = self.c[last_tstart_ind]
-
-        x = (np.array([t_s**i for i in range(7, -1, -1)]) @ c)
-        x_dot = (np.array([(i)*t_s**max(0, i-1) for i in range(7, -1, -1)]) @ c)
-        x_ddot = (np.array([(i*(i-1))*t_s**max(0, i-2) for i in range(7, -1, -1)]) @ c)
-        x_dddot = (np.array([(i*(i-1)*(i-2))*t_s**max(0, i-3) for i in range(7, -1, -1)]) @ c)
-        x_ddddot = (np.array([(i*(i-1)*(i-2)*(i-3))*t_s**max(0, i-4) for i in range(7, -1, -1)]) @ c)
+        else:
+            t_s = float(t - self.t_start_vec[last_tstart_ind]) # / self.T_horizon
+            c = self.c[last_tstart_ind]
+            if t == 0:
+                x = self.points[0]
+            else:
+                x = (np.array([t_s**i for i in range(7, -1, -1)]) @ c)
+            x_dot = (np.array([float(i)*t_s**max(0, i-1) for i in range(7, -1, -1)]) @ c)
+            x_ddot = (np.array([float(i*(i-1))*t_s**max(0, i-2) for i in range(7, -1, -1)]) @ c)
+            x_dddot = (np.array([float(i*(i-1)*(i-2))*t_s**max(0, i-3) for i in range(7, -1, -1)]) @ c)
+            x_ddddot = (np.array([float(i*(i-1)*(i-2)*(i-3))*t_s**max(0, i-4) for i in range(7, -1, -1)]) @ c)
         
         yaw, yaw_dot = 0., 0.
         return x, x_dot, x_ddot, x_dddot, x_ddddot, yaw, yaw_dot
@@ -419,7 +390,7 @@ def yield_all_task_trajectories(
     verbose=False
 ):
     """
-    Generator to yield tuple(params, task_name, TrajectoryGenerator)
+    Generator to yield tuple(config, task_name, TrajectoryGenerator)
 
     Parameters:
         - root: str - The root path for where datasets are located
@@ -427,40 +398,40 @@ def yield_all_task_trajectories(
         - verbose: bool - whether or not to print outputs
     
     Returns:
-        - tuple(params, task_name, TrajectoryGenerator)
+        - tuple(config, task_name, TrajectoryGenerator)
         
     """
-    for task_name in tqdm(sorted(os.listdir(f"{root}{dataset_name}/waypoints/"))):
+    for task_name in sorted(os.listdir(f"{root}{dataset_name}/waypoints/")):
         # get the parameters for the current task
-        params = get_task_params(root, dataset_name, task_name[:-4])
+        config = get_task_params(root, dataset_name, task_name[:-4])
         # for parameters that we must control at trajectory generation time,
         # we create a grid in the same way that we do in task_gen.py
         traj_search_params = []
-        for k, v in sorted(params.items(), key=lambda x: x[0]):
+        for k, v in sorted(config.items(), key=lambda x: x[0]):
             if type(v) == list:
                 traj_search_params.append(k)
-        traj_param_grid = product(*[params[k] for k in traj_search_params])
+        traj_param_grid = product(*[config[k] for k in traj_search_params])
         # iterate through the trajectory specific parameter grid
         for i, traj_task_params in enumerate(traj_param_grid):
-            # set the traj_search_paramss to their values in the current grid-search
+            # set the traj_search_params to their values in the current grid-search
             for j, key in enumerate(traj_search_params):
-                params[key] = traj_task_params[j]
+                config[key] = traj_task_params[j]
             if verbose:
                 # display progress
                 print(f"Creating Trajectory Object for {task_name[:-4]}", end="\r", flush=True)
 
-            # yield the task_name, current params, and the corresponding Trajectory Generator Object
+            # yield the task_name, current config, and the corresponding Trajectory Generator Object
             try:
-                if params["trajectory_generator"] == "cubic_spline":
-                    trajectory_generator = BSplineTrajectoryGenerator(deepcopy(params), f"{root}{dataset_name}/", task_name[:-4])
-                elif params["trajectory_generator"] == "min_snap":
-                    trajectory_generator = MinSnapTrajectoryGenerator(deepcopy(params), f"{root}{dataset_name}/", task_name[:-4])
-                else: #if params["trajectory_generator"] == "constant_speed":
-                    trajectory_generator = TrajectoryGenerator(deepcopy(params), f"{root}{dataset_name}/", task_name[:-4])
+                if config["trajectory_generator"] == "cubic_spline":
+                    trajectory_generator = BSplineTrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
+                elif config["trajectory_generator"] == "min_snap":
+                    trajectory_generator = MinSnapTrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
+                else:
+                    trajectory_generator = TrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
             except Exception as e:
-                trajectory_generator = TrajectoryGenerator(deepcopy(params), f"{root}{dataset_name}/", task_name[:-4])
+                trajectory_generator = TrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
             yield (
-                params,
+                config,
                 task_name[:-4],  
                 trajectory_generator
             )
@@ -474,7 +445,7 @@ def run():
     trajectories_by_task = {} 
     prev_task_group = None
     # iterate through all trajectories
-    for i, (params, task, traj_gen_obj) in enumerate(yield_all_task_trajectories(verbose=VERBOSE)):
+    for i, (config, task, traj_gen_obj) in enumerate(yield_all_task_trajectories(verbose=VERBOSE)):
         task_group = "_".join(task.split("_")[1:3])
         # if we have reached a new group of tasks, then
         if task_group not in trajectories_by_task.keys():

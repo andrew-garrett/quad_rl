@@ -5,12 +5,12 @@
 import json
 from collections import namedtuple
 import xml.etree.ElementTree as etxml
-import pkg_resources
-import numpy as np
 try:
     import cupy as cp
 except:
-    print("cupy not available")
+    print("cupy not available, defaulting to np/torch")
+import numpy as np
+import torch
 from scipy.signal import savgol_filter
 
 import dynamics_models
@@ -21,31 +21,31 @@ import cost_models
 #########################################################
 
 
-def get_mppi_config(config_fpath="./mppi/configs/mppi_config.json"):
+def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     """
-    Creates a config object for more concise parameter storage
+    Creates a config object for mppi parameters
 
     Parameters:
         - config_fpath: str - the filepath of the desired config file
 
     Returns:
-        - mppi_config: namedtuple() - the mppi config object
+        - config: namedtuple() - the mppi config object
     """
     with open(config_fpath, "r") as f:
         config_dict = json.load(f)
 
-        # Set derived/processed parameters
-        config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
-        config_dict["DTYPE"] = getattr(np, config_dict["DTYPE"])
-        config_dict["Q"] = np.diag(config_dict["Q"])
-        config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
-        config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
-        config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
-        # Get URDF parameters
-        config_dict["CF2X"] = parseURDFParameters()
+    # Set derived/processed parameters
+    config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
+    config_dict["DTYPE"] = getattr(np, config_dict["DTYPE"])
+    config_dict["Q"] = np.diag(config_dict["Q"])
+    config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
+    config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
+    config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
+    # Get URDF parameters
+    config_dict["CF2X"] = parseURDFParameters()
 
-    mppi_config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
-    return mppi_config
+    config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
+    return config
 
 def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
     """
@@ -57,7 +57,7 @@ def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
         - urdf_fpath: str - the filepath of the desired urdf config file
 
     Returns:
-        - cf2x_config: namedtuple() - the urdf config object
+        - config: namedtuple() - the drone_model urdf config object
     """
     URDF_TREE = etxml.parse(urdf_fpath).getroot()
     M = float(URDF_TREE[1][0][1].attrib['value'])
@@ -92,8 +92,8 @@ def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
     config_dict.pop("URDF_TREE")
     config_dict.pop("urdf_fpath")
     # Return a namedtuple
-    cf2x_config = namedtuple("CF2X", config_dict.keys())(**config_dict)
-    return cf2x_config
+    config = namedtuple("cf2x_config", config_dict.keys())(**config_dict)
+    return config
 
 
 """

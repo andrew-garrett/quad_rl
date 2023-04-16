@@ -46,7 +46,7 @@ def collect_bootstrap_data(
     trajectories_by_task = {}
     prev_task_group = None
     # iterate through all trajectories
-    for i, (params, task, traj_gen_obj) in enumerate(yield_all_task_trajectories(
+    for i, (_, task, traj_gen_obj) in enumerate(yield_all_task_trajectories(
         root=ROOT, 
         dataset_name=DATASET_NAME, 
         verbose=VERBOSE
@@ -57,7 +57,7 @@ def collect_bootstrap_data(
             if prev_task_group is not None:
                 # for each trajectory in the previous group of tasks, collect desired states
                 for traj in trajectories_by_task[prev_task_group]["generated_trajectories"]:
-                    traj_track.run(traj, gui=VERBOSE, plot=VERBOSE)
+                    traj_track.track(traj)
             
             # then, initialize the next group of tasks
             trajectories_by_task[task_group] = {
@@ -66,9 +66,8 @@ def collect_bootstrap_data(
         prev_task_group = task_group
         trajectories_by_task[task_group]["generated_trajectories"].append(traj_gen_obj)
     
-    if len(trajectories_by_task.keys()) == 1:
-        for traj in trajectories_by_task[task_group]["generated_trajectories"]:
-            traj_track.run(traj, gui=VERBOSE, plot=VERBOSE)
+    for traj in trajectories_by_task[task_group]["generated_trajectories"]:
+        traj_track.track(traj)
 
     cleanup(ROOT, DATASET_NAME)
 
@@ -80,7 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Trajectory Tracking Script')
     t_battery_choices = [TASK_BATTERY.name for _, TASK_BATTERY in enumerate(task_battery.TaskBattery)]
     t_battery_choices.append("FULL")
-    parser.add_argument('--task_battery', default="DEBUG", type=str, help='task_battery.TaskBattery', metavar='', choices=t_battery_choices)
+    parser.add_argument('--task-battery', default="DEBUG", type=str, help='task_battery.TaskBattery', metavar='', choices=t_battery_choices)
     ARGS = parser.parse_args()
     if ARGS.task_battery != "FULL":
         for _, t_battery in enumerate(task_battery.TaskBattery):
