@@ -1,6 +1,7 @@
 gym-pybullet-drones/
 results/
 __pycache__/
+.vscode/
 wandb/
 
 datasets/
