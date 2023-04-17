@@ -6,7 +6,10 @@ class DynamicsDataset(Dataset):
     def __init__(self, stage, config) -> None:
         super().__init__()
         self.config = config
-        self.dataset_path = os.path.join("bootstrap/datasets", self.config["dataset"]["name"])
+        try:
+            self.dataset_path = os.path.join(self.config["dataset"]["root"], self.config["dataset"]["name"])
+        except:
+            self.dataset_path = os.path.join("bootstrap/datasets", self.config["dataset"]["name"])
         self.dataset_path = os.path.join(self.dataset_path, "torch_dataset")
         self.states = torch.load(os.path.join(self.dataset_path, f"{stage}_states.pt"))
         self.control_targets = torch.load(os.path.join(self.dataset_path, f"{stage}_control_targets.pt"))
