@@ -52,7 +52,7 @@ class DynamicsLightningModule(pl.LightningModule):
         output_dict = {
             "loss": loss
         }
-        if stage != "test":
+        if stage == "train":
             self.log_metric(f"{stage}/loss", loss)
         self.step_outputs[stage].append(output_dict)
         return output_dict
@@ -82,7 +82,10 @@ class DynamicsLightningModule(pl.LightningModule):
         self.epoch_end("test")
     
     def log_metric(self, metric_name, metric_value):
-        self.log(metric_name, metric_value, on_epoch=True, prog_bar=True)
+        if "epoch" in metric_name:
+            self.log(metric_name, metric_value, on_epoch=True, prog_bar=True)
+        else:
+            self.log(metric_name, metric_value, on_step=True, prog_bar=True)
         if metric_name in self.metrics:
             self.metrics[metric_name].append(metric_value.item())
         else:
