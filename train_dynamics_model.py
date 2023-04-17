@@ -8,7 +8,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from training.lightning import DynamicsLightningModule
 
-wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all")
 
 def load_config(config_path):
     with open(config_path) as f:
@@ -37,6 +36,7 @@ def build_trainer_module(config, experiment_dir, epochs):
     weights_dir = f"{experiment_dir}/models"
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(weights_dir, exist_ok=True)
+    wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all", group=config["dataset"]["name"])
     checkpoint_callback = ModelCheckpoint(
         save_top_k=1,
         monitor="val/loss",
@@ -72,5 +72,5 @@ if __name__ == "__main__":
     experiment_dir = create_experiment_dir()
     trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
     trainer.fit(module)
-    module.save_metrics()
-    #module.render_videos()
+    # module.save_metrics()
+    # module.render_videos()
