@@ -46,6 +46,7 @@ def build_trainer_module(config, experiment_dir, epochs):
     )
     trainer = pl.Trainer(
         accelerator="auto",
+        devices=1,
         max_epochs=epochs,
         log_every_n_steps=50,
         # default_root_dir=weights_dir,
