@@ -36,7 +36,7 @@ def build_trainer_module(config, experiment_dir, epochs):
     weights_dir = f"{experiment_dir}/models"
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(weights_dir, exist_ok=True)
-    wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all", group=config["dataset"]["name"])
+    wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all") #, group=config["dataset"]["name"])
     checkpoint_callback = ModelCheckpoint(
         save_top_k=1,
         monitor="val/loss",
