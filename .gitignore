@@ -3,5 +3,6 @@ results/
 __pycache__/
 .vscode/
 wandb/
+lightning_logs/
 
 datasets/

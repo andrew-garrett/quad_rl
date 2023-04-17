@@ -2,6 +2,7 @@ import numpy as np
 import os
 import json
 import argparse
+import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -24,7 +25,7 @@ def parse_args():
     )
     parser.add_argument(
         "--epochs",
-        default=50,
+        default=5,
         help="Number of training epochs",
         type=int
     )
@@ -36,7 +37,20 @@ def build_trainer_module(config, experiment_dir, epochs):
     weights_dir = os.path.join(experiment_dir, "models")
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(weights_dir, exist_ok=True)
-    wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all", group=config["dataset"]["name"])
+
+    logging_config = {
+        "reinit": True,
+        "project": "ESE650 Final Project",
+        "group": config["dataset"]["name"]
+    }
+
+    wandb_config = {}
+    for k, v in config.items():
+        for sub_k, sub_v in v.items():
+            wandb_config[f"{k}_{sub_k}"] = sub_v
+    run = wandb.init(config=wandb_config, **logging_config)
+    wandb_logger = WandbLogger(log_model="all", experiment=run)
+
     checkpoint_callback = ModelCheckpoint(
         save_top_k=1,
         monitor="val/loss_epoch",
@@ -85,5 +99,6 @@ if __name__ == "__main__":
     experiment_dir = create_experiment_dir(config)
     trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
     trainer.fit(module)
+    wandb.finish()
     # module.save_metrics()
     # module.render_videos()
