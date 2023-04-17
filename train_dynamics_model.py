@@ -44,15 +44,26 @@ def build_trainer_module(config, experiment_dir, epochs):
         # dirpath=weights_dir,
         # filename="model-{epoch:02d}-{val_loss:.2f}",
     )
-    trainer = pl.Trainer(
-        devices=1,
-        accelerator="auto",
-        max_epochs=epochs,
-        log_every_n_steps=50,
-        # default_root_dir=weights_dir,
-        logger=wandb_logger,
-        callbacks=[checkpoint_callback]
-    )
+    try:
+        trainer = pl.Trainer(
+            devices=1,
+            accelerator="gpu",
+            max_epochs=epochs,
+            log_every_n_steps=50,
+            # default_root_dir=weights_dir,
+            logger=wandb_logger,
+            callbacks=[checkpoint_callback]
+        )
+    except:
+        trainer = pl.Trainer(
+            devices=1,
+            accelerator="cpu",
+            max_epochs=epochs,
+            log_every_n_steps=50,
+            # default_root_dir=weights_dir,
+            logger=wandb_logger,
+            callbacks=[checkpoint_callback]
+        )
     module = DynamicsLightningModule(config, log_dir)
     return trainer, module
 
