@@ -52,6 +52,8 @@ class DynamicsLightningModule(pl.LightningModule):
         output_dict = {
             "loss": loss
         }
+        if stage != "test":
+            self.log_metric(f"{stage}/loss", loss)
         self.step_outputs[stage].append(output_dict)
         return output_dict
     
@@ -67,8 +69,7 @@ class DynamicsLightningModule(pl.LightningModule):
     def epoch_end(self, stage):
         outputs = self.step_outputs[stage]
         loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log_metric(f"{stage}/loss", loss)
-        # self.log(f"{stage}/loss", loss, on_epoch=True)
+        self.log_metric(f"{stage}/loss_epoch", loss)
         self.step_outputs[stage] = []
     
     def on_train_epoch_end(self):
@@ -87,10 +88,10 @@ class DynamicsLightningModule(pl.LightningModule):
         else:
             self.metrics[metric_name] = [metric_value.item()]
     
-    # def save_metrics(self):
-    #     filename = os.path.join(self.log_dir, "metrics.json")
-    #     with open(filename, "w") as f:
-    #         json.dump(self.metrics, f)
+    def save_metrics(self):
+        filename = os.path.join(self.log_dir, "metrics.json")
+        with open(filename, "w") as f:
+            json.dump(self.metrics, f)
     
     def train_dataloader(self):
         train_dataset = DynamicsDataset("train", self.config)
