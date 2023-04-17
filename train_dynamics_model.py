@@ -32,11 +32,11 @@ def parse_args():
     return args
 
 def build_trainer_module(config, experiment_dir, epochs):
-    log_dir = f"{experiment_dir}/logs"
-    weights_dir = f"{experiment_dir}/models"
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(weights_dir, exist_ok=True)
-    wandb_logger = WandbLogger(project="ESE650 Final Project", log_model="all") #, group=config["dataset"]["name"])
+    # log_dir = f"{experiment_dir}/logs"
+    # weights_dir = f"{experiment_dir}/models"
+    # os.makedirs(log_dir, exist_ok=True)
+    # os.makedirs(weights_dir, exist_ok=True)
+    wandb_logger = WandbLogger(project="ESE650 Final Project") #, log_model="all") #, group=config["dataset"]["name"])
     checkpoint_callback = ModelCheckpoint(
         save_top_k=1,
         monitor="val/loss",
@@ -48,11 +48,11 @@ def build_trainer_module(config, experiment_dir, epochs):
         accelerator="gpu",
         devices=1,
         max_epochs=epochs,
-        default_root_dir=weights_dir,
+        # default_root_dir=weights_dir,
         logger=wandb_logger,
         callbacks=[checkpoint_callback]
     )
-    module = DynamicsLightningModule(config, log_dir)
+    module = DynamicsLightningModule(config, "")
     return trainer, module
 
 def create_experiment_dir():
@@ -69,8 +69,8 @@ def create_experiment_dir():
 if __name__ == "__main__":
     args = parse_args()
     config = load_config(args.config_path)
-    experiment_dir = create_experiment_dir()
-    trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
+    # experiment_dir = create_experiment_dir()
+    trainer, module = build_trainer_module(config, "", args.epochs)
     trainer.fit(module)
     # module.save_metrics()
     # module.render_videos()
