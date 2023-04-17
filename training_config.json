@@ -1,5 +1,6 @@
 {
     "dataset": {
+        "root": "./bootstrap/datasets/",
         "name": "AGGRO_000",
         "num_drones": 27
     },
