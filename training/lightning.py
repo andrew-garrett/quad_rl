@@ -24,7 +24,6 @@ class DynamicsLightningModule(pl.LightningModule):
         self.config = config
         self.log_dir = log_dir
         self.parse_config()
-        self.save_hyperparameters()
         self.model = DynamicsNet(self.config)
         self.loss_fn = losses[self.loss_name]()
         self.metrics = {}
@@ -41,9 +40,20 @@ class DynamicsLightningModule(pl.LightningModule):
         self.weight_decay = self.config["training"]["weight_decay"]
         self.optimizer_name = self.config["training"]["optimizer"]
         self.loss_name = self.config["training"]["loss_fn"]
+        self.use_scheduler = self.config["training"]["scheduler"]
     
     def configure_optimizers(self):
-        return optimizers[self.optimizer_name](self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        optimizer = optimizers[self.optimizer_name](self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        opts = {"optimizer": optimizer}
+        if self.use_scheduler:
+            scheduler_config = {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.25, patience=3, threshold=1e-4, threshold_mode="rel"),
+                "interval": "epoch",
+                "frequency": 1,
+                "monitor": "val/loss_epoch"
+            }
+            opts["lr_scheduler"] = scheduler_config
+        return opts
     
     def step(self, batch, stage):
         state, action, acceleration = batch
@@ -52,7 +62,7 @@ class DynamicsLightningModule(pl.LightningModule):
         output_dict = {
             "loss": loss
         }
-        if stage != "test":
+        if stage == "train":
             self.log_metric(f"{stage}/loss", loss)
         self.step_outputs[stage].append(output_dict)
         return output_dict
@@ -86,6 +96,7 @@ class DynamicsLightningModule(pl.LightningModule):
             self.log(metric_name, metric_value, on_epoch=True, on_step=False, prog_bar=True)
         else:
             self.log(metric_name, metric_value, on_epoch=False, on_step=True, prog_bar=True)
+
         if metric_name in self.metrics:
             self.metrics[metric_name].append(metric_value.item())
         else:
@@ -98,7 +109,7 @@ class DynamicsLightningModule(pl.LightningModule):
     
     def train_dataloader(self):
         train_dataset = DynamicsDataset("train", self.config)
-        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True,num_workers=8)
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
         return train_loader
     
     def val_dataloader(self):

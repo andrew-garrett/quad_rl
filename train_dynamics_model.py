@@ -5,27 +5,41 @@ import argparse
 import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 from training.lightning import DynamicsLightningModule
 
 
-def load_config(config_path):
+def load_config(config_path, root, dataset_name):
     with open(config_path) as f:
         config = json.load(f)
+        config["dataset"]["root"] = root
+        config["dataset"]["name"] = dataset_name
     return config
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config_path",
+        "--dataset-root",
+        default="./bootstrap/datasets/",
+        help="root where datasets are stored",
+        type=str
+    )
+    parser.add_argument(
+        "--dataset_name",
+        default="AGGRO_000",
+        help="name of the dataset",
+        type=str
+    )
+    parser.add_argument(
+        "--config-path",
         default="training_config.json",
         help="path_to_config_file",
         type=str
     )
     parser.add_argument(
         "--epochs",
-        default=5,
+        default=10,
         help="Number of training epochs",
         type=int
     )
@@ -60,13 +74,15 @@ def build_trainer_module(config, experiment_dir, epochs):
     )
     try:
         trainer = pl.Trainer(
-            devices=1,
+            devices=-1,
             accelerator="gpu",
             max_epochs=epochs,
             log_every_n_steps=50,
             # default_root_dir=weights_dir,
             logger=wandb_logger,
-            callbacks=[checkpoint_callback]
+            callbacks=[checkpoint_callback,
+                       LearningRateMonitor(logging_interval='epoch')
+                      ]
         )
     except:
         trainer = pl.Trainer(
@@ -95,7 +111,7 @@ def create_experiment_dir(config):
 
 if __name__ == "__main__":
     args = parse_args()
-    config = load_config(args.config_path)
+    config = load_config(args.config_path, args.root, args.dataset_name)
     experiment_dir = create_experiment_dir(config)
     trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
     trainer.fit(module)
