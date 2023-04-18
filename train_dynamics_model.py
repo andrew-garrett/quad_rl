@@ -20,19 +20,19 @@ def load_config(config_path, root, dataset_name):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dataset-root",
+        "--root",
         default="./bootstrap/datasets/",
         help="root where datasets are stored",
         type=str
     )
     parser.add_argument(
-        "--dataset-name",
+        "--dataset",
         default="AGGRO_000",
         help="name of the dataset",
         type=str
     )
     parser.add_argument(
-        "--config-path",
+        "--config",
         default="training_config.json",
         help="path_to_config_file",
         type=str
@@ -111,7 +111,7 @@ def create_experiment_dir(config):
 
 if __name__ == "__main__":
     args = parse_args()
-    config = load_config(args.config_path, args.root, args.dataset_name)
+    config = load_config(args.config, args.root, args.dataset)
     experiment_dir = create_experiment_dir(config)
     trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
     trainer.fit(module)
