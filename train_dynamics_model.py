@@ -17,6 +17,14 @@ def load_config(config_path, root, dataset_name):
         config["dataset"]["name"] = dataset_name
     return config
 
+def load_sweep_config(config, sweep_config_path):
+    with open(sweep_config_path) as f:
+        sweep_config = json.load(f)
+    for k, v in sweep_config.items():
+        split_k = k.split("_")
+        config[split_k[0]]["_".join(split_k[1:])] = v
+    return config
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -42,6 +50,11 @@ def parse_args():
         default=10,
         help="Number of training epochs",
         type=int
+    )
+    parser.add_argument(
+        "--sweep",
+        help="sweep config file",
+        type=str
     )
     args = parser.parse_args()
     return args
@@ -112,6 +125,8 @@ def create_experiment_dir(config):
 if __name__ == "__main__":
     args = parse_args()
     config = load_config(args.config, args.root, args.dataset)
+    if args.sweep is not None:
+        config = load_sweep_config(config, args.sweep)
     experiment_dir = create_experiment_dir(config)
     trainer, module = build_trainer_module(config, experiment_dir, args.epochs)
     trainer.fit(module)
