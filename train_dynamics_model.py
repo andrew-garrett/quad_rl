@@ -26,7 +26,7 @@ def parse_args():
         type=str
     )
     parser.add_argument(
-        "--dataset_name",
+        "--dataset-name",
         default="AGGRO_000",
         help="name of the dataset",
         type=str
