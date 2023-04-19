@@ -87,8 +87,9 @@ class AnalyticalModel(DynamicsModel):
     Line numbers refer to BaseAviary Class
 
     """
-    def __init__(self, config):
+    def __init__(self, config, explicit = True):
         super().__init__(config)
+        self.is_explicit = explicit 
 
     def motorModel(self, w_i):
         """Relate angular velocities [rpm] of motors to motor forces [N] and toqrues [N-m] via simplified motor model"""
@@ -122,6 +123,10 @@ class AnalyticalModel(DynamicsModel):
         # ---- Position, F = m*a ----
         f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
         f_thrust = d_R_w.apply(np.array([0, 0, u1])) #force due to thrust, rotated into world frame
+        
+        #Rotate if using Pybullet conventions #TODO 
+        if not self.is_explicit: 
+            rpy_rates = d_R_w.inv().apply(rpy_rates)
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
         F_sum = f_thrust - f_g #net force [N]
@@ -129,6 +134,10 @@ class AnalyticalModel(DynamicsModel):
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
         omega_dot = np.dot(self.config.CF2X.J_INV, (u2 - np.cross(rpy_rates, np.dot(self.config.CF2X.J, rpy_rates)))) 
+
+        #Rotate back if using pybullet conventions #TODO
+        if not self.is_explicit:
+            omega_dot = d_R_w.apply(omega_dot)
 
         return state, accel, omega_dot
     

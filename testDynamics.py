@@ -104,16 +104,27 @@ class TestDynamics():
 #Create config
 config = get_mppi_config()
 
+# #Create dyanmics model object
+# testAnalytical = AnalyticalModel(config) 
+# test_data = np.load("test_data_dyn2.npy")
+# test_state = test_data['states'][0]
+
+# #Run Tester Class
+# AnalyticalTester = TestDynamics(testAnalytical, test_state)
+# AnalyticalTester.runModel(printout=True)
+# AnalyticalTester.linear_absolute_error()
+# AnalyticalTester.rotational_absolute_error()
+
 #Create dyanmics model object
-testAnalytical = AnalyticalModel(config) 
-test_data = np.load("test_data_dyn2.npy")
-test_state = test_data['states'][0]
+testAnalyticalPYB = AnalyticalModel(config, explicit = False) 
+test_data = np.load("test_data_new.npy")
+test_state = test_data['states'][4]
 
 #Run Tester Class
-AnalyticalTester = TestDynamics(testAnalytical, test_state)
-AnalyticalTester.runModel(printout=True)
-AnalyticalTester.linear_absolute_error()
-AnalyticalTester.rotational_absolute_error()
+AnalyticalTesterPYB = TestDynamics(testAnalyticalPYB, test_state)
+AnalyticalTesterPYB.runModel(printout=True)
+AnalyticalTesterPYB.linear_absolute_error()
+AnalyticalTesterPYB.rotational_absolute_error()
 
 print("end")
 
