@@ -50,8 +50,8 @@ class CostModel:
         """
         Compute control-dependent cost
         """
-        self.U_SHAPE_ARR[:] = u
-        control_cost = self.U_SHAPE_ARR @ self.config.U_SIGMA_ARR @ v.T
+        self.U_SHAPE_ARR[:] = u / self.config.CF2X.MAX_RPM
+        control_cost = self.U_SHAPE_ARR @ self.config.U_SIGMA_ARR @ (v.T/ self.config.CF2X.MAX_RPM)
         return self.config.GAMMA * np.diag(control_cost)
 
     def __call__(self, state, desired_state, u, v):

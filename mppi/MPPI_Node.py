@@ -2,6 +2,10 @@
 #################################################
 
 
+import os
+import sys
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+from copy import deepcopy
 import json
 from collections import namedtuple
 import xml.etree.ElementTree as etxml
@@ -42,7 +46,7 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
     config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
     # Get URDF parameters
-    config_dict["CF2X"] = parseURDFParameters()
+    config_dict["CF2X"] = parseURDFParameters(os.path.join(os.path.dirname(config_fpath), "cf2x.urdf"))
 
     config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return config
@@ -151,7 +155,7 @@ class MPPI:
 
         # Pre-allocate data structures
         self.COST_MAP = np.zeros(self.config.K, dtype=self.config.DTYPE)
-        self.SAMPLES_X = np.zeros((self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
+        self.SAMPLES_X = np.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
         self.U = np.zeros((self.config.T, self.config.U_SPACE), dtype=self.config.DTYPE)
         self.U[:] = self.config.U_NOMINAL
 
@@ -165,9 +169,9 @@ class MPPI:
         rho = np.min(self.COST_MAP)
         min_normed_cost_map = self.COST_MAP - rho
         weights = np.exp(-(self.config.TEMPERATURE**-1)*min_normed_cost_map)
-        return weights / np.sum(weights)
+        self.weights = weights / np.sum(weights)
     
-    def smooth_controls(self, weights, du):
+    def smooth_controls(self, du):
         """
         Use the Savitsky-Golay Filter to smooth controls
 
@@ -175,7 +179,7 @@ class MPPI:
             - weights: np.array(K) - the importance sampling weights
             - du: np.array(K, T, U_SPACE) - the control perturbations
         """
-        weighted_samples = du.T @ weights
+        weighted_samples = du.T @ self.weights
         self.U += savgol_filter(
             weighted_samples.T, 
             window_length=int(np.sqrt(self.config.K)), 
@@ -211,7 +215,7 @@ class MPPI:
             )
         
         # prepare to sample in parallel
-        self.SAMPLES_X[:] = state
+        self.SAMPLES_X[0, :] = state
 
         # iteratively sample T-length trajectories, K times in parallel
         for t in range(1, self.config.T+1):
@@ -220,24 +224,25 @@ class MPPI:
             # Perturb the current optimal control
             v_tm1 = u_tm1 + du[:, t-1, :]
             # Approximate the next state for the perturbed optimal control
-            self.SAMPLES_X = self.F(self.SAMPLES_X, v_tm1)
+            self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
+            # yield deepcopy(self.SAMPLES_X)
             # Compute the cost of taking the perturbed optimal control
-            self.COST_MAP += self.S(self.SAMPLES_X, desired_state, u_tm1, v_tm1)
+            self.COST_MAP += self.S(self.SAMPLES_X[t], desired_state, u_tm1, v_tm1)
 
         # Compute the importance sampling weights
-        weights = self.compute_weights()
+        self.compute_weights()
 
         # Compute the smoothed control, weighted by importance sampling
-        self.smooth_controls(weights, du)
+        self.smooth_controls(du)
 
-        # Get the next control
-        next_control = self.U[0]
+        # # Get the next control
+        # next_control = self.U[0]
         
-        # Roll the controls
-        self.U = np.roll(self.U, shift=-1, axis=0)
-        self.U[-1] = self.config.U_NOMINAL
+        # # Roll the controls
+        # self.U = np.roll(self.U, shift=-1, axis=0)
+        # self.U[-1] = self.config.U_NOMINAL
 
-        return next_control
+        # return next_control
     
 
 

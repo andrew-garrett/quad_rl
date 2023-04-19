@@ -11,5 +11,5 @@
     "ALPHA" : 0.1,
     "Q": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     "DTYPE": "float32",
-    "DYNAMICS_MODEL": "DynamicsModel"
+    "DYNAMICS_MODEL": "AnalyticalModel"
 }
