@@ -28,6 +28,10 @@ def cleanup(root, dataset_name):
     Zip a dataset and delete the uncompressed folder
     """
     data_root = f"{root}{dataset_name}"
+    ##### Copy the tracking config to the dataset root
+    shutil.copy("./configs/tracking_config.json", data_root)
+    os.rename(f"{data_root}/tracking_config.json", f"{data_root}/{dataset_name}_TRACKING_CONFIG.json")
+    ##### Walk the dataset directory and zip it's contents
     with ZipFile(f"{data_root}.zip", "w") as zip_object:
         for folder, sub_folders, f_names in os.walk(data_root):
             for f_name in f_names:
@@ -35,6 +39,7 @@ def cleanup(root, dataset_name):
                 zip_object.write(f_path, f_path[len(data_root):])
     
     if os.path.exists(f"{data_root}.zip"):
+        ##### Delete the uncompressed dataset folder
         shutil.rmtree(data_root)
         return True
     else:
@@ -120,7 +125,7 @@ def get_task_params(
     """
 
     # load params
-    with open(f"{root}{dataset_name}/{dataset_name}.json", "r") as f:
+    with open(f"{root}{dataset_name}/{dataset_name}_TASK_CONFIG.json", "r") as f: ############################# CHANGE MADE
         params_raw = json.load(f)
 
     params_prepped = {}

@@ -204,9 +204,42 @@ DEBUG_TASK_BATTERY = {
             "res": [0.25, 0.5],
             "speed": [MED_SPEED],
             "trajectory_generator": [
-                # "constant_speed",
+                "constant_speed",
                 # "cubic_spline", 
-                "min_snap"
+                # "min_snap"
+            ]
+        }
+    }
+}
+
+TEST_TASK_BATTERY = {
+    "racetrack": {
+        "taskcase_generator": "generate_racetrack_tasks",
+        "params": {
+            "num_drones": 1,
+            "dh": [0.0, 3.0],
+            "radii": [2.0, 6.0],
+            "rdp_threshold": [0.025, 0.1, 0.25],
+            "res": [0.25, 0.5],
+            "speed": [HIGH_SPEED, AGGRO_MULTIPLIER*HIGH_SPEED],
+            "trajectory_generator": [
+                "min_snap",
+                # "mppi"
+            ]
+        }
+    },
+    "avoid": {
+        "taskcase_generator": "generate_avoid_tasks",
+        "params": {
+            "num_drones": 1,
+            "dh": [0.0],
+            "radii": [1.0, 2.0],
+            "rdp_threshold": [0.025, 0.1, 0.25],
+            "res": [0.25, 0.5],
+            "speed": [MED_SPEED],
+            "trajectory_generator": [
+                "min_snap",
+                # "mppi"
             ]
         }
     }

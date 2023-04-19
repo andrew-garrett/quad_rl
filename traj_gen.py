@@ -47,7 +47,7 @@ class TrajectoryGenerator:
         """
         self.root = root
         self.task_name = task_name
-        self.config = config
+        self.config = config # TODO: @Andrew, migrate config to namedtuple
         with open(f"{root}waypoints/{task_name}.csv", "r", newline="\n") as f:
             self.path = np.vstack(([row for i, row in enumerate(csv.reader(f)) if i > 0])).astype("float")
 
