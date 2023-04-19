@@ -47,7 +47,7 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return config
 
-def parseURDFParameters(urdf_fpath="./mppi/configs/cf2x.urdf"):
+def parseURDFParameters(urdf_fpath="./configs/cf2x.urdf"):
     """
     Loads parameters from the URDF file.
 
