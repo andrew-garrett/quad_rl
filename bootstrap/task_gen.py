@@ -223,7 +223,7 @@ class Tasks:
         dataset_name=DEFAULT_DATASET_NAME
     ):
         """
-        For x,y,z directions, generate waypoints in various figure eight patterns.s
+        For x,y,z directions, generate waypoints in various figure eight patterns
 
         Parameters:
             - params: dict() - parameter dictionary for generating tasks
@@ -256,6 +256,40 @@ class Tasks:
                             row = [short_axis[t_step], perp_axis[t_step], long_axis[t_step]]
                         csv_writer.writerow(row)
         print("Figure-Eight Tasks Generated")
+        return
+    
+    @staticmethod
+    def generate_racetrack_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
+        """
+        Generate waypoints for a few racetrack-style tasks.
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        """
+        print("Racetrack Tasks Generated")
+        return
+    
+    @staticmethod
+    def generate_racetrack_tasks(
+        params, 
+        root=DEFAULT_ROOT, 
+        dataset_name=DEFAULT_DATASET_NAME
+    ):
+        """
+        Generate waypoints for a few racetrack-style tasks.
+
+        Parameters:
+            - params: dict() - parameter dictionary for generating tasks
+            - root: str - The root path for where datasets are located
+            - dataset_name: str - The name of the dataset
+        """
+        print("Obstacle Avoidance Tasks Generated")
         return
 
     @staticmethod
@@ -291,7 +325,7 @@ class Tasks:
             battery[key] = value["params"]
         
         # Save the dataset parameters
-        with open(f"{root}{dataset_name}/{dataset_name}.json", "w") as f:
+        with open(f"{root}{dataset_name}/{dataset_name}_TASK_CONFIG.json", "w") as f: ############################ CHANGE MADE
             json.dump(battery, f, indent="\t")
         
         return dataset_name

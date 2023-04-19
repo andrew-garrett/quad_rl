@@ -5,6 +5,7 @@
 import sys
 # setting path
 sys.path.append('..\\quad_rl')
+import json
 import argparse
 import threading
 import bootstrap.task_battery as task_battery
@@ -17,7 +18,9 @@ import traj_track
 #################### GLOBAL VARIABLES ####################
 ##########################################################
 
-ROOT = "./bootstrap/datasets/"
+# Get the physics model from the tracking_config.json and augment the ROOT to account for different physics models
+with open("./configs/tracking_config.json", "r") as f:
+    ROOT = f"./bootstrap/datasets/{json.load(f)['PHYSICS']}/"
 
 VERBOSE = False
 
@@ -32,7 +35,7 @@ def collect_bootstrap_data(
     """
     Function to create an initial bootstrapped training dataset
 
-        1. Generate waypoint csv files for each task_case (parameterized by path-planning parameters)
+        1. Generate waypoint csv files for each task case (parameterized by path-planning parameters)
         2. For each waypoint csv, plan several trajectories according (parameterized by trajectory-planning parameters)
         3. For each trajectory, collect simulation data from num_iterations of num_trials of the following that trajectory
             X is all (state_i, control_i) pairs (70% of each trajectory's mini-dataset)
@@ -58,7 +61,7 @@ def collect_bootstrap_data(
                 # for each trajectory in the previous group of tasks, collect desired states
                 for traj in trajectories_by_task[prev_task_group]["generated_trajectories"]:
                     traj_track.track(traj)
-            
+
             # then, initialize the next group of tasks
             trajectories_by_task[task_group] = {
                 "generated_trajectories": []
@@ -76,7 +79,7 @@ def collect_bootstrap_data(
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Trajectory Tracking Script')
+    parser = argparse.ArgumentParser(description='Bootstrap Simulation Dataset Collection Script')
     t_battery_choices = [TASK_BATTERY.name for _, TASK_BATTERY in enumerate(task_battery.TaskBattery)]
     t_battery_choices.append("FULL")
     parser.add_argument('--task-battery', default="DEBUG", type=str, help='task_battery.TaskBattery', metavar='', choices=t_battery_choices)
@@ -86,8 +89,6 @@ if __name__ == "__main__":
             if t_battery.name == ARGS.task_battery:
                 collect_bootstrap_data(t_battery)
     else:
-        # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        #     executor.map(collect_bootstrap_data, [t_battery for _, t_battery in enumerate(task_battery.TaskBattery)])
         threads = []
         for _, t_battery in enumerate(task_battery.TaskBattery):
             x = threading.Thread(target=collect_bootstrap_data, args=(t_battery,))

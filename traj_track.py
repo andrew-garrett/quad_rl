@@ -49,7 +49,7 @@ def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config
     config_dict["TARGET_NOISE_MODEL"] = namedtuple("noise_model", config_dict["TARGET_NOISE_MODEL"].keys())(**config_dict["TARGET_NOISE_MODEL"])
     if trajectory is None:
         config_dict["OUTPUT_FOLDER"] = f"sim_data" # TODO: @Andrew 
-        config_dict["T_HORIZON"] *= 1.1*0 # TODO: @Andrew 
+        config_dict["T_HORIZON"] *= 1.1*0 # TODO: @Andrew
     else:
         # Trajectory parameters overwrites tracking parameters
         config_dict["CONTROL_PERIOD_STEPS"] = int(np.floor(config_dict["SIMULATION_FREQ_HZ"]/config_dict["CONTROL_FREQ_HZ"])) # TODO: @Andrew 
@@ -60,9 +60,10 @@ def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config
             config_dict["VIZ"] = get_viz()
         except:
             pass
-
+    
     config = namedtuple("tracking_config", config_dict.keys())(**config_dict)
     return config
+
 
 def get_viz():
     """
@@ -76,7 +77,7 @@ def get_viz():
         radius=sphereRadius
     )
     markers["flightSphereId"] = p.createVisualShape(
-        shapeType=p.GEOM_SPHERE, 
+        shapeType=p.GEOM_SPHERE,
         rgbaColor=[0, 1, 0, 1],
         radius=sphereRadius*0.2
     )
@@ -145,7 +146,7 @@ def initialize_tracking(trajectory, config):
         else:
             INIT_RPYS = np.array([[0., 0., trajectory.config["rpy0"]*np.pi/180.] for k in range(num_drones)])
     else:
-        INIT_RPYS = np.array([[0., 0., 2*np.pi*(k / num_drones)] for k in range(num_drones)])
+        INIT_RPYS = np.array([[0., 0., 2*np.pi*(k / num_drones) - np.pi] for k in range(num_drones)])
 
     #### Create the environment with or without video capture ##
     if config.VISION: 
@@ -175,7 +176,7 @@ def initialize_tracking(trajectory, config):
                          record=config.RECORD,
                          obstacles=config.OBSTACLES,
                          user_debug_gui=config.USER_DEBUG_GUI
-                         )
+                        )
         
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
@@ -210,7 +211,7 @@ def render_markers(env, config, points=None, obs=None, target_pos=None):
                     basePosition=env.INIT_XYZS[k, :] + points[wpt_ind],
                     useMaximalCoordinates=1
                 )
-    if obs is not None: # Render smaller spheres for Trajectory and FLight Path
+    if obs is not None: # Render smaller spheres for Trajectory and Flight Path
         for k in range(env.NUM_DRONES):
             p.createMultiBody(
                 baseMass=0,
@@ -236,7 +237,8 @@ def get_control(trajectory, env, ctrl, config, target_state, obs, action):
     # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
     target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"].reshape(1, 3)
-    target_rpy = np.array([[0., 0., 2*np.pi*(k / env.NUM_DRONES)] for k in range(env.NUM_DRONES)])
+    target_rpy = env.INIT_RPYS
+    target_rpy_rates = np.zeros_like(env.INIT_XYZS)
     # Apply noise to the target
     if not trajectory.is_done:
         pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
@@ -245,6 +247,14 @@ def get_control(trajectory, env, ctrl, config, target_state, obs, action):
         target_vel += vel_noise
         rpy_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_r, size=(env.NUM_DRONES, 3))
         target_rpy = (Rotation.from_euler("xyz", rpy_noise, degrees=False) * Rotation.from_euler("xyz", target_rpy, degrees=False)).as_euler("xyz", degrees=False)
+
+
+    # target_pos = env.INIT_XYZS
+    # target_pos[:, -1] += 2.0
+    # target_vel = np.zeros_like(target_pos)
+    # target_rpy = np.zeros_like(target_pos)
+    # target_rpy_rates = np.zeros_like(target_pos)
+    
     # Collect Position Error
     pos_error = np.zeros((env.NUM_DRONES, 3))
     for k in range(env.NUM_DRONES):
@@ -252,9 +262,10 @@ def get_control(trajectory, env, ctrl, config, target_state, obs, action):
                                                                           state=obs[str(k)]["state"],
                                                                           target_pos=target_pos[k],
                                                                           target_vel=target_vel[k],
-                                                                          target_rpy=target_rpy[k]
+                                                                          target_rpy=target_rpy[k],
+                                                                          target_rpy_rates=target_rpy_rates[k]
                                                                          )
-    return target_pos, target_vel, target_rpy, action, pos_error
+    return target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error
 
 
 #################### RUNNER ####################
@@ -285,7 +296,7 @@ def track(trajectory):
         #### Compute control at the desired frequency ######################################
         if t_counter%config.CONTROL_PERIOD_STEPS == 0:
             target_state = trajectory.update(t_counter*env.TIMESTEP)
-            target_pos, target_vel, target_rpy, action, pos_error = get_control(trajectory, env, ctrl, config, target_state, obs, action)
+            target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(trajectory, env, ctrl, config, target_state, obs, action)
             if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Plot Trajectory and Flight
                 render_markers(env, config, obs=obs, target_pos=target_pos)
             #### First check if we have finished our trajectory ############################
@@ -298,11 +309,14 @@ def track(trajectory):
                 break
 
         for k in range(env.NUM_DRONES): #### Log the simulation
+            #### If we are using the explicit dynamics model, set the angular velocity in the state to be the rpy_rates
+            if env.PHYSICS == Physics.DYN:
+                obs[str(k)]["state"][13:16] = env.rpy_rates[k]
             logger.log(
                 drone=k,
                 timestamp=t_counter/env.SIM_FREQ,
                 state=obs[str(k)]["state"],
-                control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], np.zeros(3)])
+                control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]])
             )
         if t_counter%env.SIM_FREQ == 0: #### Printout
             env.render()
@@ -319,7 +333,6 @@ def track(trajectory):
         t_counter += config.AGGREGATE_PHY_STEPS # Propragate physics
     env.close() #### Close the environments
     logger.save() #### Save the simulation results
-         
-
-# if __name__ == "__main__":
     
+    #### Return the name of the physics engine so we can add the zipped dataset to a directory labelled by this
+    return env.PHYSICS.name

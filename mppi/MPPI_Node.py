@@ -13,8 +13,8 @@ import numpy as np
 import torch
 from scipy.signal import savgol_filter
 
-import mppi.dynamics_models
-import mppi.cost_models
+import mppi.dynamics_models as dynamics_models
+import mppi.cost_models as cost_models
 
 
 #################### MPPI PARAMETERS ####################
