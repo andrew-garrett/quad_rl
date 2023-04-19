@@ -4,7 +4,9 @@
 
 import numpy as np
 
-from scipy.spatial.transform import Rotation 
+from scipy.spatial.transform import Rotation
+
+import pybullet as p
 
 #################### FUNCTIONAL DYNAMICS MODEL ####################
 ###################################################################
@@ -80,46 +82,53 @@ class DynamicsModel:
 class AnalyticalModel(DynamicsModel): 
     """
     Child class for simple analytical dynamics model
-    ALL EQUATION NUMBERS REFER TO MEAM 620 Proj1_1 HANDOUT (Uploaded to Drive)
+    PULL FROM DYNAMCIS CLASS FROM BASE AVIARY CLASS AND MEAM 620 Proj 1_1 Handouy
+    DRONE SETUP SLIGHTLY DIFFERENT THAN 620 HANDOUT, equation numbers relate to handout
+    Line numbers refer to BaseAviary Class
+
     """
     def __init__(self, config):
         super().__init__(config)
 
     def motorModel(self, w_i):
         """Relate angular velocities [rpm] of motors to motor forces [N] and toqrues [N-m] via simplified motor model"""
-        #Clip RPM to be in feasible range 
-        F_i = self.config.CF2X.KF * np.clip(w_i, 0, self.config.CF2X.MAX_RPM)**2 #[N], eq (6)
-        M_i = self.config.CF2X.KM * np.clip(w_i, 0, self.config.CF2X.MAX_RPM)**2 #[N/M], eq (7)
+        F_i = self.config.CF2X.KF*w_i**2 #[N], eq (6)
+        M_i = self.config.CF2X.KM*w_i**2 #[N/M], eq (7)
         return F_i, M_i
 
     def preprocess(self, state, u):
         """Go from control in terms or RPM to control u_1 (eq 10) and u_2 (eq 16)"""
         F, M = self.motorModel(u) #get forces and moments from motor model
         u1 = np.sum(F) #eq 10
-        u2 = np.array([self.config.CF2X.L*(F[1] - F[3]), self.config.CF2X.L*(F[2] - F[0]), M[0] - M[1] + M[2] - M[3]]) #Eq (14, 16)
+
+        #X drone torques 
+        torque_x = self.config.CF2X.L/np.sqrt(2) * (F[0] + F[1] - F[2] - F[3])  #line 821
+        torque_y = self.config.CF2X.L/np.sqrt(2) * (-F[0] + F[1] + F[2] - F[3]) #line 822
+        torque_z = -1*M[0] + M[1] - M[2] + M[3]                                 #line 819
+        u2 = np.array([torque_x, torque_y, torque_z])                           #eq 16
+
         return state, u1, u2 
 
-    def step_dynamics(self, input):
+    def step_dynamics(self, input_proc):
         """
         Given the current state and control input u, use dynamics to find the accelerations
         Two coupled second order ODES 
         """
-        state, u1, u2 = input # Decompose input
-        xyz, rpy, velo, omega = state[:3], state[3:6], state[6:9], state[9:] #Decompose state
-
-        #Coordinate transformation from drone frame to world frame, can use inverse of orientation
-        w_R_d = Rotation.from_euler(('xyz'), rpy).inv().as_matrix() 
+        state, u1, u2 = input_proc # Decompose input
+        xyz, velo, rpy, rpy_rates = state[:3], state[3:6], state[6:9], state[9:]
+        #Coordinate transformation from drone frame to world frame, can use orientation
+        d_R_w = Rotation.from_euler(('xyz'), rpy)
 
         # ---- Position, F = m*a ----
-        f_g = np.array([0, 0, -1*self.config.CF2X.GRAVITY]) #force due to gravity 
-        f_thrust = w_R_d @ np.array([0, 0, u1]) #force due to thrust, rotated into world frame
+        f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
+        f_thrust = d_R_w.apply(np.array([0, 0, u1])) #force due to thrust, rotated into world frame
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
-        F_sum = f_g + f_thrust #net force [N]
+        F_sum = f_thrust - f_g #net force [N]
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
-        omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(omega, self.config.CF2X.J @ omega))
+        omega_dot = np.dot(self.config.CF2X.J_INV, (u2 - np.cross(rpy_rates, np.dot(self.config.CF2X.J, rpy_rates)))) 
 
         return state, accel, omega_dot
     
@@ -127,18 +136,16 @@ class AnalyticalModel(DynamicsModel):
         """Given the current state, control input, and time interval, propogate the state kinematics"""
         #Decompose output and state
         state, accel, omega_dot = output
-        xyz, rpy, velo, omega = state[:3], state[3:6], state[6:9], state[9:]
+        xyz, velo, rpy, rpy_rates = state[:3], state[3:6], state[6:9], state[9:]
         dt = self.config.DT
         
-        #Apply kinematic equations (x_t = x_0 + v_0 dt + 0.5 a t^2, v_t = v_0 + a dt)
-        xyz_dt = xyz + velo * dt + 0.5 * accel * dt**2
+        #Apply kinematic equations (same way it is done in dynamics)
         velo_dt = velo + accel * dt
+        xyz_dt = xyz + velo_dt * dt
         
         #same for rotation 
-        rpy_dt = rpy + omega * dt + 0.5 * omega_dot * dt**2
-        omega_dt = omega + omega_dot * dt 
+        rpy_rates_dt = rpy_rates + omega_dot * dt 
+        rpy_dt = rpy + rpy_rates_dt * dt
         
         #format in shape of state and return 
-        return np.hstack((xyz_dt, rpy_dt, velo_dt, omega_dt))
-
-
+        return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
