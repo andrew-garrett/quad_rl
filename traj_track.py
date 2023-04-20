@@ -237,16 +237,17 @@ def get_control(trajectory, env, ctrl, config, target_state, obs, action):
     # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
     target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"].reshape(1, 3)
-    target_rpy = env.INIT_RPYS
-    target_rpy_rates = np.zeros_like(env.INIT_XYZS)
+    target_rpy = env.INIT_RPYS # TODO: @Andrew, generate target roll and pitch from acceleration
+    target_rpy_rates = np.zeros_like(env.INIT_XYZS) # TODO: @Andrew, generate target roll and pitch rates from jerk?
+
     # Apply noise to the target
-    if not trajectory.is_done:
-        pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
-        target_pos += pos_noise
-        vel_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_v, size=(env.NUM_DRONES, 3))
-        target_vel += vel_noise
-        rpy_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_r, size=(env.NUM_DRONES, 3))
-        target_rpy = (Rotation.from_euler("xyz", rpy_noise, degrees=False) * Rotation.from_euler("xyz", target_rpy, degrees=False)).as_euler("xyz", degrees=False)
+    # if not trajectory.is_done:
+    #     pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
+    #     target_pos += pos_noise
+    #     vel_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_v, size=(env.NUM_DRONES, 3))
+    #     target_vel += vel_noise
+    #     rpy_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_r, size=(env.NUM_DRONES, 3))
+    #     target_rpy = (Rotation.from_euler("xyz", rpy_noise, degrees=False) * Rotation.from_euler("xyz", target_rpy, degrees=False)).as_euler("xyz", degrees=False)
 
 
     # target_pos = env.INIT_XYZS
@@ -316,16 +317,17 @@ def track(trajectory):
                 drone=k,
                 timestamp=t_counter/env.SIM_FREQ,
                 state=obs[str(k)]["state"],
-                control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]])
+                control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]]),
+                flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
             )
-        if t_counter%env.SIM_FREQ == 0: #### Printout
-            env.render()
-            if config.VISION: #### Print matrices with the images captured by each drone 
-                for k in range(env.NUM_DRONES):
-                    print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
-                          obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
-                          obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
-                    )
+        # if t_counter%env.SIM_FREQ == 0: #### Printout
+        #     env.render()
+        #     if config.VISION: #### Print matrices with the images captured by each drone 
+        #         for k in range(env.NUM_DRONES):
+        #             print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
+        #                   obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
+        #                   obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
+        #             )
 
         if config.GUI: #### Sync the simulation
             sync(t_counter, START, env.TIMESTEP)
