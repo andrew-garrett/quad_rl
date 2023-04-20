@@ -23,7 +23,7 @@ class TestDynamics():
             u_in = self.data[12:, i] #control action taken 
             s_out = self.data[:12, i]
             #Call model to get prediction
-            self.s_pred[:, i-1] = self.model(s_in, u_in)
+            self.s_pred[:, i-1] = self.model(np.reshape(s_in, (1,12)), np.reshape(u_in, (1,4)))
 
             #Printing for debugging 
             if printout: 

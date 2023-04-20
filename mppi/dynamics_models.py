@@ -116,13 +116,14 @@ class AnalyticalModel(DynamicsModel):
         Two coupled second order ODES 
         """
         state, u1, u2 = input_proc # Decompose input
+        k, _ = np.shape(state)
         xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:].T
         # Coordinate transformation from drone frame to world frame, can use orientation
         d_R_w = Rotation.from_euler(('xyz'), rpy)
 
         # ---- Position, F = m*a ----
         f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
-        f_thrust = d_R_w.apply(np.vstack((np.zeros(self.config.K), np.zeros(self.config.K), u1)).T) #force due to thrust, rotated into world frame
+        f_thrust = d_R_w.apply(np.vstack((np.zeros(k), np.zeros(k), u1)).T) #force due to thrust, rotated into world frame
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
         F_sum = f_thrust - f_g # net force [N]
@@ -130,7 +131,7 @@ class AnalyticalModel(DynamicsModel):
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
         rpy_rates.T
-        omega_dot = self.config.CF2X.J_INV @ (u2.T - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0))
+        omega_dot = (self.config.CF2X.J_INV @ (u2.T - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0))).T
         # omega_dot = np.dot(self.config.CF2X.J_INV, (u2 - np.cross(rpy_rates, np.dot(self.config.CF2X.J, rpy_rates.T).T).T).T).T
 
         return state, accel, omega_dot
@@ -152,6 +153,12 @@ class AnalyticalModel(DynamicsModel):
         
         #format in shape of state and return 
         return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
+
+    def accelerationLabels(self, state, u):
+        """Helper function to compare with ground truth accelerations calculated using dv/dt
+            Input the states, output the models acceleration predictions"""
+        _ , linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
+        return linear_accel, angular_accel
 
 class SampleLearnedModel(DynamicsModel):
     """
