@@ -9,6 +9,7 @@ from itertools import product
 import numpy as np
 from scipy.interpolate import make_interp_spline
 from scipy.sparse.linalg import lsmr
+from tqdm import tqdm
 
 from bootstrap.task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT, DEFAULT_TASK_BATTERY
 from bootstrap.utils import collect_task_trajectory, get_task_params, plot_trajectories_by_task
@@ -392,7 +393,11 @@ def yield_all_task_trajectories(
         - tuple(config, task_name, TrajectoryGenerator)
         
     """
-    for task_name in sorted(os.listdir(f"{root}{dataset_name}/waypoints/")):
+    if verbose: 
+        tasks = tqdm(sorted(os.listdir(f"{root}{dataset_name}/waypoints/")))
+    else:
+        tasks = sorted(os.listdir(f"{root}{dataset_name}/waypoints/"))
+    for task_name in tasks:
         # get the parameters for the current task
         config = get_task_params(root, dataset_name, task_name[:-4])
         # for parameters that we must control at trajectory generation time,

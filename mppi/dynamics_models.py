@@ -93,8 +93,8 @@ class AnalyticalModel(DynamicsModel):
 
     def motorModel(self, w_i):
         """Relate angular velocities [rpm] of motors to motor forces [N] and toqrues [N-m] via simplified motor model"""
-        F_i = self.config.CF2X.KF*w_i**2 #[N], eq (6)
-        M_i = self.config.CF2X.KM*w_i**2 #[N/M], eq (7)
+        F_i = self.config.CF2X.KF*w_i**2 # [N], eq (6)
+        M_i = self.config.CF2X.KM*w_i**2 # [N/M], eq (7)
         return F_i, M_i
 
     def preprocess(self, state, u):

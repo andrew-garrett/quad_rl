@@ -1,6 +1,6 @@
 {
     "DRONE_MODEL" : "cf2x",
-    "PHYSICS" : "dyn",
+    "PHYSICS" : "pyb",
     "VISION" : false,
     "GUI" : false,
     "RECORD" : false,

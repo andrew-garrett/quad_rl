@@ -320,14 +320,14 @@ def track(trajectory):
                 control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]]),
                 flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
             )
-        if t_counter%env.SIM_FREQ == 0: #### Printout
-            env.render()
-            if config.VISION: #### Print matrices with the images captured by each drone 
-                for k in range(env.NUM_DRONES):
-                    print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
-                          obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
-                          obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
-                    )
+        # if t_counter%env.SIM_FREQ == 0: #### Printout
+        #     env.render()
+        #     if config.VISION: #### Print matrices with the images captured by each drone 
+        #         for k in range(env.NUM_DRONES):
+        #             print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
+        #                   obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
+        #                   obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
+        #             )
 
         if config.GUI: #### Sync the simulation
             sync(t_counter, START, env.TIMESTEP)
