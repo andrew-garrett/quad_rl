@@ -7,7 +7,7 @@
     "T_HORIZON" : 2.5,
     "FREQUENCY" : 48,
     "TEMPERATURE" : 1.0,
-    "GAMMA" : 0.5,
+    "GAMMA" : 0.0,
     "ALPHA" : 0.1,
     "Q": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     "DTYPE": "float32",

@@ -82,7 +82,7 @@ class DynamicsModel:
 class AnalyticalModel(DynamicsModel): 
     """
     Child class for simple analytical dynamics model
-    PULL FROM DYNAMCIS CLASS FROM BASE AVIARY CLASS AND MEAM 620 Proj 1_1 Handouy
+    PULL FROM DYNAMICS CLASS FROM BASE AVIARY CLASS AND MEAM 620 Proj 1_1 Handouy
     DRONE SETUP SLIGHTLY DIFFERENT THAN 620 HANDOUT, equation numbers relate to handout
     Line numbers refer to BaseAviary Class
 
@@ -122,18 +122,16 @@ class AnalyticalModel(DynamicsModel):
 
         # ---- Position, F = m*a ----
         f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
-        f_thrust = d_R_w.apply(np.vstack((np.zeros(self.config.K), np.zeros(self.config.K), u1)).T) #force due to thrust, rotated into world frame
+        f_thrust = d_R_w.apply(np.vstack((np.zeros_like(u1), np.zeros_like(u1), u1)).T) #force due to thrust, rotated into world frame
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
         F_sum = f_thrust - f_g # net force [N]
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
-        rpy_rates.T
         omega_dot = self.config.CF2X.J_INV @ (u2.T - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0))
-        # omega_dot = np.dot(self.config.CF2X.J_INV, (u2 - np.cross(rpy_rates, np.dot(self.config.CF2X.J, rpy_rates.T).T).T).T).T
-
-        return state, accel, omega_dot
+        # -self.config.CF2X.J @ omega_dot + u2.T = hat(rpy_rates) @ (self.config.CF2X.J @ rpy_rates) = np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0)
+        return state, accel, omega_dot.T
     
     def postprocess(self, output):
         """Given the current state, control input, and time interval, propogate the state kinematics"""
