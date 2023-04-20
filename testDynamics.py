@@ -23,7 +23,11 @@ class TestDynamics():
             u_in = self.data[12:, i] #control action taken 
             s_out = self.data[:12, i]
             #Call model to get prediction
+<<<<<<< HEAD
             self.s_pred[:, i-1] = self.model(np.reshape(s_in, (1,12)), np.reshape(u_in, (1,4)))
+=======
+            self.s_pred[:, i-1] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+>>>>>>> 13cd9b9f73dd8cfc712c98afe593c307e6abf5e5
 
             #Printing for debugging 
             if printout: 
@@ -106,12 +110,14 @@ config = get_mppi_config()
 
 #Create dyanmics model object
 testAnalytical = AnalyticalModel(config) 
-test_data = np.load("test_data_dyn2.npy")
+flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
+# flight_file = "test_data_dyn2.npy"
+test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
 #Run Tester Class
 AnalyticalTester = TestDynamics(testAnalytical, test_state)
-AnalyticalTester.runModel(printout=True)
+AnalyticalTester.runModel(printout=False)
 AnalyticalTester.linear_absolute_error()
 AnalyticalTester.rotational_absolute_error()
 

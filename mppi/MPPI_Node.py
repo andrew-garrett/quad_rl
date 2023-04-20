@@ -5,7 +5,6 @@
 import os
 import sys
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-from copy import deepcopy
 import json
 from collections import namedtuple
 import xml.etree.ElementTree as etxml
@@ -235,14 +234,14 @@ class MPPI:
         # Compute the smoothed control, weighted by importance sampling
         self.smooth_controls(du)
 
-        # # Get the next control
-        # next_control = self.U[0]
+        # Get the next control
+        next_control = self.U[0]
         
-        # # Roll the controls
-        # self.U = np.roll(self.U, shift=-1, axis=0)
-        # self.U[-1] = self.config.U_NOMINAL
+        # Roll the controls
+        self.U = np.roll(self.U, shift=-1, axis=0)
+        self.U[-1] = self.config.U_NOMINAL
 
-        # return next_control
+        return next_control
     
 
 

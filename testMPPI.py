@@ -30,27 +30,29 @@ mppi_node = MPPI_Node.MPPI(mppi_config)
 T_horizon = np.linspace(0, mppi_config.T_HORIZON, num=mppi_config.T+1)
 mppi_node.mppi_iter(INIT_STATE, TARGET_STATE)
 
-fig, ax = plt.subplots(3, 1)
-
-weight_threshold = 1e-8
-filtered_sample_inds = np.nonzero(mppi_node.weights > weight_threshold)
+weight_threshold = 1e-2
+filtered_sample_inds = np.nonzero(mppi_node.weights > weight_threshold)[0]
 filtered_weights = mppi_node.weights[filtered_sample_inds]
+filtered_weights /= np.sum(filtered_weights)
 filtered_samples = mppi_node.SAMPLES_X[:, filtered_sample_inds, :]
-best_sample = np.argmax(mppi_node.weights)
+best_sample_ind = np.argmax(filtered_weights)
 print(f"MPPI found {filtered_sample_inds.shape[0]} non-zero weighted samples out of {mppi_config.K}")
 
+fig, ax = plt.subplots(3, 1)
 for k in range(filtered_weights.shape[0]):
-    if k != best_sample:
+    if k != best_sample_ind:
         for i in range(3):
-            ax[i].plot(T_horizon, mppi_node.SAMPLES_X[:, k, i], c=cm.jet(filtered_weights))
+            ax[i].plot(T_horizon, filtered_samples[:, k, i], c=cm.jet(filtered_weights[k]))
 for i in range(3):
-    ax[i].plot(T_horizon, mppi_node.SAMPLES_X[:, best_sample, i], c=cm.jet(mppi_node.weights[best_sample]), linewidth=2.0)
+    ax[i].plot(T_horizon, mppi_node.SAMPLES_X[:, best_sample_ind, i], c=cm.jet(filtered_weights[best_sample_ind]), linewidth=2.0)
+
 
 plt.show()
 
-# cost_map_cmap = np.hstack([(mppi_node.COST_MAP - np.min(mppi_node.COST_MAP)) / (np.max(mppi_node.COST_MAP) - np.min(mppi_node.COST_MAP)) for t in range(mppi_config.T+1)])
-# weight_cmap = np.vstack([mppi_node.weights  for t in range(mppi_config.T+1)]).flatten()
-# plt.scatter(mppi_node.SAMPLES_X[:, :, 0], mppi_node.SAMPLES_X[:, :, 1], c=cm.jet(weight_cmap), edgecolor='none')
+weight_cmap = np.vstack([filtered_weights  for t in range(mppi_config.T+1)]).flatten()
+p = plt.scatter(filtered_samples[:, :, 0], filtered_samples[:, :, 1], c=cm.jet(weight_cmap), edgecolor='none', linewidths=1)
+plt.colorbar(p)
+plt.show()
 
 # fig = plt.figure()
 # ax = fig.add_subplot(projection="3d")
