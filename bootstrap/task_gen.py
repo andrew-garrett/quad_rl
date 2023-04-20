@@ -5,17 +5,10 @@
 import os
 import json
 import csv
-from itertools import product
 import numpy as np
 
-from task_battery import *
-
-
-#################### GLOBAL PARAMETERS ####################
-###########################################################
-
-
-DEFAULT_DATASET_NAME = f"{DEFAULT_TASK_BATTERY.name}000"
+from bootstrap.task_battery import DEFAULT_ROOT, DEFAULT_DATASET_NAME, DEFAULT_TASK_BATTERY, DEFAULT_T
+from bootstrap.utils import get_task_param_grid
 
 
 #################### GENERATE WAYPOINTS FOR TASK BATTERY ####################
@@ -44,7 +37,7 @@ class Tasks:
             - dataset_name: str - The name of the dataset
         
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
         print("Takeoff Tasks Generated")
@@ -65,7 +58,7 @@ class Tasks:
             - dataset_name: str - The name of the dataset
         
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
         print("Landing Tasks Generated")
@@ -86,7 +79,7 @@ class Tasks:
             - dataset_name: str - The name of the dataset
         
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             continue
         print("Hover Tasks Generated")
@@ -110,10 +103,10 @@ class Tasks:
             - dataset_name: str - The name of the dataset
         
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            task_fname = f"{root}{dataset_name}/waypoints/task_linear_step_ax-{ax}.csv"
+            task_fname = os.path.join(root, dataset_name, "waypoints", f"task_linear_step_ax-{ax}.csv")
             if os.path.exists(task_fname):
                 continue
             else:
@@ -152,10 +145,10 @@ class Tasks:
             - dataset_name: str - The name of the dataset
 
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            task_fname = f"{root}{dataset_name}/waypoints/task_angular_step_ax-{ax}.csv"
+            task_fname = os.path.join(root, dataset_name, "waypoints", f"task_angular_step_ax-{ax}.csv")
             if os.path.exists(task_fname):
                 continue
             else:
@@ -192,10 +185,10 @@ class Tasks:
             - dataset_name: str - The name of the dataset
             s
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax = param_grid_i[0]
-            task_fname = f"{root}{dataset_name}/waypoints/task_straight_away_ax-{ax}.csv"
+            task_fname = os.path.join(root, dataset_name, "waypoints", f"task_straight_away_ax-{ax}.csv")
             if os.path.exists(task_fname):
                 continue
             else:
@@ -230,10 +223,10 @@ class Tasks:
             - root: str - The root path for where datasets are located
             - dataset_name: str - The name of the dataset
         """
-        param_grid = get_param_grid(params)
+        param_grid = get_task_param_grid(params)
         for i, param_grid_i in enumerate(param_grid):
             ax, dh, r, res = param_grid_i
-            task_fname = f"{root}{dataset_name}/waypoints/task_figure_eight_ax-{ax}_radii-{r}_dh-{dh}_res-{res}.csv"
+            task_fname = os.path.join(root, dataset_name, "waypoints", f"task_figure_eight_ax-{ax}_radii-{r}_dh-{dh}_res-{res}.csv")
             if os.path.exists(task_fname):
                 continue
             else:
@@ -248,9 +241,9 @@ class Tasks:
                     short_axis = 0.5 * np.sin(r*t) * long_axis
                     perp_axis = np.sin(dh*t)
                     for t_step in range(num_wpts):
-                        if ax == 'x':
+                        if ax == "x":
                             row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]
-                        elif ax == 'y':
+                        elif ax == "y":
                             row = [perp_axis[t_step], long_axis[t_step], short_axis[t_step]]
                         else:
                             row = [short_axis[t_step], perp_axis[t_step], long_axis[t_step]]
@@ -294,11 +287,10 @@ class Tasks:
 
     @staticmethod
     def generate_tasks(
-        root=DEFAULT_ROOT, 
-        dataset_name=DEFAULT_DATASET_NAME, 
+        root=DEFAULT_ROOT,
         task_battery=DEFAULT_TASK_BATTERY):
         """
-        Generate All Tasks for a given TaskBattery
+        Generate All Tasks for a given TaskBattery.
 
         Parameters:
             - root: str - The root path for where datasets are located
@@ -307,43 +299,26 @@ class Tasks:
 
         """
         # Make the dataset directory
-        if os.path.exists(f"{root}{dataset_name}/waypoints/"):
-            counter = 0
-            while True:
-                if os.path.exists(f"{root}{dataset_name[:-3]}{str(counter).zfill(3)}/waypoints/"):
-                    counter += 1
-                else:
-                    dataset_name = f"{dataset_name[:-3]}{str(counter).zfill(3)}"
-                    break
-        os.makedirs(f"{root}{dataset_name}/waypoints/")
+        dataset_name = f"{task_battery.name}_000"
+        dataset_fpath = os.path.join(root, dataset_name)
+        if os.path.exists(dataset_fpath) or os.path.exists(f"{dataset_fpath}.zip"):
+            new_dataset_ind = max([int(d.replace(".zip", "")[-3]) for d in os.listdir(root) if task_battery.name in d]) + 1
+            dataset_name = f"{dataset_name[:-3]}{str(new_dataset_ind).zfill(3)}"
+            dataset_fpath = os.path.join(root, dataset_name)
+        os.makedirs(os.path.join(dataset_fpath, "waypoints"))
 
         # Iterate through the tasking battery and generate waypoint files
         battery = task_battery.value
         for key, value in battery.items():
             # generate task by calling relevant function
-            getattr(Tasks, value["taskcase_generator"])(value['params'], root, dataset_name)
+            getattr(Tasks, value["taskcase_generator"])(value["params"], root, dataset_name)
             battery[key] = value["params"]
         
         # Save the dataset parameters
-        with open(f"{root}{dataset_name}/{dataset_name}_TASK_CONFIG.json", "w") as f: ############################ CHANGE MADE
+        with open(os.path.join(dataset_fpath, f"{dataset_name}_TASK_CONFIG.json"), "w") as f: ############################ CHANGE MADE
             json.dump(battery, f, indent="\t")
         
         return dataset_name
-
-######################## UTILITY FUNCTION ########################
-##################################################################
-
-
-def get_param_grid(params):
-    """
-    Create a grid of all combinations of list-based parameters
-
-    Parameters:
-        - params: dict() - parameter dictionary for generating tasks
-        
-    """
-    param_spaces = [v for k, v in sorted(params.items(), key=lambda x: x[0]) if k not in TRAJECTORY_PARAMS]
-    return product(*param_spaces)
 
 
 ######################## RUNNER ########################
@@ -351,5 +326,4 @@ def get_param_grid(params):
 
 
 if __name__ == "__main__":
-
     Tasks.generate_tasks()

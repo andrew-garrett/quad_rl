@@ -4,23 +4,15 @@
 
 import os
 import csv
-from copy import deepcopy
+from tqdm import tqdm
+from collections import namedtuple
 from itertools import product
 import numpy as np
 from scipy.interpolate import make_interp_spline
 from scipy.sparse.linalg import lsmr
-from tqdm import tqdm
 
-from bootstrap.task_gen import TRAJECTORY_PARAMS, DEFAULT_T, DEFAULT_DATASET_NAME, DEFAULT_ROOT, DEFAULT_TASK_BATTERY
-from bootstrap.utils import collect_task_trajectory, get_task_params, plot_trajectories_by_task
-
-#################### GLOBAL VARIABLES ####################
-##########################################################
-
-
-DEFAULT_TASK_NAME = "linear_step.csv"
-
-VERBOSE = True
+from bootstrap.task_battery import DEFAULT_TASK_NAME, DEFAULT_DATASET_NAME, DEFAULT_ROOT
+from bootstrap.utils import get_traj_params
 
 
 #################### TRAJECTORY GENERATORS ####################
@@ -48,18 +40,18 @@ class TrajectoryGenerator:
         """
         self.root = root
         self.task_name = task_name
-        self.config = config # TODO: @Andrew, migrate config to namedtuple
-        with open(f"{root}waypoints/{task_name}.csv", "r", newline="\n") as f:
+        self.config = config
+        with open(os.path.join(root, "waypoints", f"{task_name}.csv"), "r", newline="\n") as f:
             self.path = np.vstack(([row for i, row in enumerate(csv.reader(f)) if i > 0])).astype("float")
 
         # Generate Sparse Waypoints (only for complex paths)
         self.filter_waypoints()
 
         # Create vector of start times of each waypoint, assuming constant speed trajectory
-        self.vel_vecs = self.config["speed"] * self.unit_vecs
+        self.vel_vecs = self.config.speed * self.unit_vecs
         self.speed_vec = np.linalg.norm(self.vel_vecs, axis=1)
         self.t_start_vec = np.hstack(
-            (np.zeros(1), np.cumsum( self.dist_vec[:-1] / self.config["speed"], axis=0)) # self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))
+            (np.zeros(1), np.cumsum( self.dist_vec[:-1] / self.config.speed, axis=0)) # self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))
         )
         self.T_horizon = self.t_start_vec[-1]
         self.t_segment_vec = np.diff(self.t_start_vec) # Define length of time for each segment, hence size=(self.n_wpts-1,)
@@ -115,7 +107,7 @@ class TrajectoryGenerator:
         max_dist, max_ind = np.max(orth_dists), np.argmax(orth_dists)
         
         # If the maximum distance is greater than a threshold, we split the segment in two and recurse
-        if (max_dist > self.config["rdp_threshold"]):
+        if (max_dist > self.config.rdp_threshold):
             # Recursion 
             return np.vstack((self.rdp_filtering(points[:max_ind])[:-1], self.rdp_filtering(points[max_ind:])))
         else:
@@ -182,8 +174,8 @@ class TrajectoryGenerator:
             # if k == "x_dot":
             #     # scale the velocity?
             #     speed = np.linalg.norm(state[i])
-            #     if speed > self.config["speed"]:
-            #         self.flat_output[k] = (self.config["speed"] / speed) * state[i]
+            #     if speed > self.config.speed:
+            #         self.flat_output[k] = (self.config.speed / speed) * state[i]
             #     else:
             #         self.flat_output[k] = state[i]
             # else:
@@ -393,80 +385,42 @@ def yield_all_task_trajectories(
         - tuple(config, task_name, TrajectoryGenerator)
         
     """
+    dataset_dir = os.path.join(root, dataset_name)
     if verbose: 
-        tasks = tqdm(sorted(os.listdir(f"{root}{dataset_name}/waypoints/")))
+        tasks = tqdm(sorted(os.listdir(os.path.join(dataset_dir, "waypoints"))))
     else:
-        tasks = sorted(os.listdir(f"{root}{dataset_name}/waypoints/"))
+        tasks = sorted(os.listdir(os.path.join(dataset_dir, "waypoints")))
     for task_name in tasks:
         # get the parameters for the current task
-        config = get_task_params(root, dataset_name, task_name[:-4])
+        config_dict = get_traj_params(root, dataset_name, task_name[:-4])
         # for parameters that we must control at trajectory generation time,
         # we create a grid in the same way that we do in task_gen.py
         traj_search_params = []
-        for k, v in sorted(config.items(), key=lambda x: x[0]):
+        for k, v in sorted(config_dict.items(), key=lambda x: x[0]):
             if type(v) == list:
                 traj_search_params.append(k)
-        traj_param_grid = product(*[config[k] for k in traj_search_params])
+        traj_param_grid = product(*[config_dict[k] for k in traj_search_params])
         # iterate through the trajectory specific parameter grid
         for i, traj_task_params in enumerate(traj_param_grid):
             # set the traj_search_params to their values in the current grid-search
             for j, key in enumerate(traj_search_params):
-                config[key] = traj_task_params[j]
+                config_dict[key] = traj_task_params[j]
             if verbose:
                 # display progress
                 print(f"Creating Trajectory Object for {task_name[:-4]}", end="\r", flush=True)
-
-            # yield the task_name, current config, and the corresponding Trajectory Generator Object
+            config = namedtuple("trajectory_config", config_dict.keys())(**config_dict)
+            # yield the current config, task_name, and the corresponding Trajectory Generator Object
             try:
-                if config["trajectory_generator"] == "cubic_spline":
-                    trajectory_generator = BSplineTrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
-                elif config["trajectory_generator"] == "min_snap":
-                    trajectory_generator = MinSnapTrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
+                if config_dict["trajectory_generator"] == "cubic_spline":
+                    trajectory_generator = BSplineTrajectoryGenerator(config, dataset_dir, task_name[:-4])
+                elif config_dict["trajectory_generator"] == "min_snap":
+                    trajectory_generator = MinSnapTrajectoryGenerator(config, dataset_dir, task_name[:-4])
                 else:
-                    trajectory_generator = TrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
+                    trajectory_generator = TrajectoryGenerator(config, dataset_dir, task_name[:-4])
             except Exception as e:
-                trajectory_generator = TrajectoryGenerator(deepcopy(config), f"{root}{dataset_name}/", task_name[:-4])
+                trajectory_generator = TrajectoryGenerator(config, dataset_dir, task_name[:-4])
             yield (
                 config,
                 task_name[:-4],  
                 trajectory_generator
             )
-
-
-#################### RUNNER ####################
-################################################
-
-
-def run():
-    trajectories_by_task = {} 
-    prev_task_group = None
-    # iterate through all trajectories
-    for i, (config, task, traj_gen_obj) in enumerate(yield_all_task_trajectories(verbose=VERBOSE)):
-        task_group = "_".join(task.split("_")[1:3])
-        # if we have reached a new group of tasks, then
-        if task_group not in trajectories_by_task.keys():
-            if prev_task_group is not None:
-                # for each trajectory in the previous group of tasks,
-                for traj in trajectories_by_task[prev_task_group]["generated_trajectories"]:
-                    trajectories_by_task[prev_task_group] = collect_task_trajectory(
-                                                                trajectories_by_task[prev_task_group], 
-                                                                traj
-                                                            )
-                # Plot Data and free some memory
-                if VERBOSE:
-                    plot_trajectories_by_task(trajectories_by_task, task_group=prev_task_group)
-                trajectories_by_task[prev_task_group]["generated_trajectories"] = None
-            
-            # then, initialize the next group of tasks
-            trajectories_by_task[task_group] = {
-                "generated_trajectories": []
-            }
-        prev_task_group = task_group
-        trajectories_by_task[task_group]["generated_trajectories"].append(traj_gen_obj)
-
-
-if __name__ == "__main__":
-    run()
-    
-
-
