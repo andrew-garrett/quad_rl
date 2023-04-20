@@ -1,11 +1,12 @@
 {
     "dataset": {
+        "root": "./bootstrap/datasets/",
         "name": "AGGRO_000",
         "num_drones": 27
     },
     "model": {
-        "state_dim": 19,
-        "control_dim": 15,
+        "state_dim": 16,
+        "control_dim": 0,
         "accel_dim": 6,
         "hidden_layers": [32, 32],
         "activation": "tanh",
@@ -13,6 +14,7 @@
     },
     "training": {
         "optimizer": "rmsprop",
+        "scheduler": true,
         "loss_fn": "mse",
         "batch_size": 64,
         "lr": 0.001,

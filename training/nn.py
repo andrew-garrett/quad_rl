@@ -25,6 +25,6 @@ class DynamicsNet(nn.Module):
         )
     
     def forward(self, state, control):
-        mlp_input = torch.cat([state, control], dim=-1)
+        mlp_input = state if self.config["model"]["control_dim"] == 0 else torch.cat([state, control], dim=-1)
         mlp_output = self.net(mlp_input)
         return mlp_output
