@@ -8,3 +8,8 @@ training/
 datasets/
 
 .vscode/
+.conda/
+
+wandb/
+
+lightning_logs/
