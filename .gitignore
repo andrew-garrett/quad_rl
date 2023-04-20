@@ -1,10 +1,11 @@
 gym-pybullet-drones/
-results/
+
+
 __pycache__/
 .vscode/
-wandb/
-lightning_logs/
+.conda/
 
 datasets/
 
-.vscode/
+wandb/
+lightning_logs/

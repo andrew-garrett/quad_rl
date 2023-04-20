@@ -3,332 +3,218 @@
 
 
 import time
-import argparse
 import numpy as np
-import pybullet as p
+from scipy.spatial.transform import Rotation
 
-from gym_pybullet_drones.utils.enums import DroneModel, Physics
+import pybullet as p
 from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
 from gym_pybullet_drones.envs.VisionAviary import VisionAviary
 from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 from gym_pybullet_drones.utils.Logger import Logger
-from gym_pybullet_drones.utils.utils import sync, str2bool
+from gym_pybullet_drones.utils.utils import sync
+
+from bootstrap.utils import get_tracking_config, render_markers
 
 
 #################### GLOBAL VARIABLES ####################
-##########################################################
+##########################################################  
 
 
-DEFAULT_DRONES = DroneModel("cf2x") # gym-pybullet-drones model
-DEFAULT_NUM_DRONES = 1
-DEFAULT_PHYSICS = Physics("pyb") # Physics("pyb_gnd_drag_dw")
-DEFAULT_VISION = False
-DEFAULT_GUI = True
-DEFAULT_RECORD_VISION = False
-DEFAULT_PLOT = True
-DEFAULT_USER_DEBUG_GUI = False
-DEFAULT_AGGREGATE = True
-DEFAULT_OBSTACLES = False
-DEFAULT_SIMULATION_FREQ_HZ = 240
-DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 12
-DEFAULT_OUTPUT_FOLDER = 'results'
-DEFAULT_COLAB = False
+# config.DRONE_MODEL
+# config.PHYSICS
+# config.VISION
+# config.GUI
+# config.RECORD
+# config.PLOT
+# config.USER_DEBUG_GUI
+# config.AGGREGATE
+# config.AGGREGATE_PHY_STEPS
+# config.OBSTACLES
+# config.SIMULATION_FREQ_HZ
+# config.CONTROL_FREQ_HZ
+# config.COLAB
 
-DEFAULT_H = 10.0
-DEFAULT_OFFSET = 1.0
+# DEFAULT_DRONES = DroneModel("cf2x") # gym-pybullet-drones model
+# DEFAULT_NUM_DRONES = 1
+# DEFAULT_PHYSICS = Physics("pyb") # Physics("pyb_gnd_drag_dw")
+# DEFAULT_VISION = False
+# DEFAULT_GUI = True
+# DEFAULT_RECORD_VISION = False
+# DEFAULT_PLOT = True
+# DEFAULT_USER_DEBUG_GUI = True
+# DEFAULT_AGGREGATE = True
+# DEFAULT_OBSTACLES = False
+# DEFAULT_SIMULATION_FREQ_HZ = 240
+# DEFAULT_CONTROL_FREQ_HZ = 48
+# DEFAULT_OUTPUT_FOLDER = 'results'
+# DEFAULT_COLAB = False
+# DEFAULT_H = 10.0
+# DEFAULT_OFFSET = 1.0
 
 
-def initialize_run(
-    trajectory,
-    AGGR_PHY_STEPS,
-    H=DEFAULT_H,
-    OFFSET=DEFAULT_OFFSET,
-    drone=DEFAULT_DRONES,
-    physics=DEFAULT_PHYSICS,
-    vision=DEFAULT_VISION,
-    gui=DEFAULT_GUI,
-    record_video=DEFAULT_RECORD_VISION,
-    plot=DEFAULT_PLOT,
-    user_debug_gui=DEFAULT_USER_DEBUG_GUI,
-    aggregate=DEFAULT_AGGREGATE,
-    obstacles=DEFAULT_OBSTACLES,
-    simulation_freq_hz=DEFAULT_SIMULATION_FREQ_HZ,
-    control_freq_hz=DEFAULT_CONTROL_FREQ_HZ,
-    colab=DEFAULT_COLAB
-):
-    num_drones = trajectory.params["num_drones"]**3
-    if num_drones == 1:
-        INIT_XYZS = np.array([np.array([0, 0, H]) for k in range(num_drones)])
-    else:
-        cube_dim = int(np.floor(num_drones**(1/3)))
-        INIT_XYZS = OFFSET*np.indices((cube_dim, cube_dim, cube_dim)).reshape((3, num_drones)).T
-        INIT_XYZS[:, -1] += H
-        INIT_XYZS += trajectory.update(0.)["x"]
+def initialize_tracking(trajectory, config):
+    """
+    Set up a Gym-Pybullet-Drones Env
+    """
+    # NxNxN cube configuration of drones, offset from each other in x, y, z by OFFSET and at z_min = H > 0
+    cube_dim = trajectory.config.num_drones
+    num_drones = trajectory.config.num_drones**3
+    INIT_XYZS = config.OFFSET*np.indices((cube_dim, cube_dim, cube_dim)).reshape((3, num_drones)).T
+    INIT_XYZS[:, -1] += config.H
     
-    if "rpy0" in trajectory.params.keys():
-        if trajectory.params["ax"] == "r":
-            INIT_RPYS = np.array([[trajectory.params["rpy0"]*np.pi/180., 0., 0.] for k in range(num_drones)])
-        elif trajectory.params["ax"] == "p":
-            INIT_RPYS = np.array([[0., trajectory.params["rpy0"]*np.pi/180., 0.] for k in range(num_drones)])
+    # Set initial orientation if parameterized in the config
+    if "rpy0" in trajectory.config._fields:
+        if trajectory.config["ax"] == "r":
+            INIT_RPYS = np.array([[trajectory.config.rpy0*np.pi/180., 0., 0.] for k in range(num_drones)])
+        elif trajectory.config["ax"] == "p":
+            INIT_RPYS = np.array([[0., trajectory.config.rpy0*np.pi/180., 0.] for k in range(num_drones)])
         else:
-            INIT_RPYS = np.array([[0., 0., trajectory.params["rpy0"]*np.pi/180.] for k in range(num_drones)])
+            INIT_RPYS = np.array([[0., 0., trajectory.config.rpy0*np.pi/180.] for k in range(num_drones)])
     else:
-        INIT_RPYS = np.array([[0., 0., 0.] for k in range(num_drones)])
+        INIT_RPYS = np.array([[0., 0., np.pi*(k / num_drones)] for k in range(num_drones)])
 
     #### Create the environment with or without video capture ##
-    if vision: 
-        env = VisionAviary(drone_model=drone,
+    if config.VISION: 
+        env = VisionAviary(drone_model=config.DRONE_MODEL,
                            num_drones=num_drones,
                            initial_xyzs=INIT_XYZS,
                            initial_rpys=INIT_RPYS,
-                           physics=physics,
+                           physics=config.PHYSICS,
                            neighbourhood_radius=10,
-                           freq=simulation_freq_hz,
-                           aggregate_phy_steps=AGGR_PHY_STEPS,
-                           gui=gui,
-                           record=record_video,
-                           obstacles=obstacles
+                           freq=config.SIMULATION_FREQ_HZ,
+                           aggregate_phy_steps=config.AGGREGATE_PHY_STEPS,
+                           gui=config.GUI,
+                           record=config.RECORD,
+                           obstacles=config.OBSTACLES,
+                           user_debug_gui=config.USER_DEBUG_GUI
                            )
     else: 
-        env = CtrlAviary(drone_model=drone,
+        env = CtrlAviary(drone_model=config.DRONE_MODEL,
                          num_drones=num_drones,
                          initial_xyzs=INIT_XYZS,
                          initial_rpys=INIT_RPYS,
-                         physics=physics,
+                         physics=config.PHYSICS,
                          neighbourhood_radius=10,
-                         freq=simulation_freq_hz,
-                         aggregate_phy_steps=AGGR_PHY_STEPS,
-                         gui=gui,
-                         record=record_video,
-                         obstacles=obstacles,
-                         user_debug_gui=user_debug_gui
-                         )
+                         freq=config.SIMULATION_FREQ_HZ,
+                         aggregate_phy_steps=config.AGGREGATE_PHY_STEPS,
+                         gui=config.GUI,
+                         record=config.RECORD,
+                         obstacles=config.OBSTACLES,
+                         user_debug_gui=config.USER_DEBUG_GUI
+                        )
         
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
 
     #### Initialize the logger #################################
     logger = Logger(
-        logging_freq_hz=int(simulation_freq_hz/AGGR_PHY_STEPS),
+        logging_freq_hz=int(config.SIMULATION_FREQ_HZ/config.AGGREGATE_PHY_STEPS),
         num_drones=env.NUM_DRONES,
-        output_folder=f"{trajectory.root}sim_data",
-        colab=colab
+        output_folder=config.OUTPUT_FOLDER,
+        colab=config.COLAB
     )
-    
+
     #### Initialize the controllers ############################
-    ctrl = [DSLPIDControl(drone_model=drone) for k in range(env.NUM_DRONES)]
+    ctrl = [DSLPIDControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
 
     return env, logger, ctrl
 
 
-
-def render_markers(
-    points, env, xyz0_traj=None, obs=None, 
-    trajSphereId=None, flightSphereId=None, 
-    target_pos=None
-):
-    """
-    Render Waypoint, Trajectory, and Flight Path Markers in the Pybullet Environment
-    """
-    sphereRadius = 0.05
-    if xyz0_traj is not None:
-        waypointSphereId = p.createVisualShape(
-            shapeType=p.GEOM_SPHERE, 
-            rgbaColor=[1, 0, 0, 1],
-            radius=sphereRadius
-        )
-        plt_num_wpts = min(100, points.shape[0])
-        plt_wpt_inds = np.linspace(0, points.shape[0] - 1, num=plt_num_wpts).astype("int")
-        for wpt_ind in plt_wpt_inds:
-            for k in range(env.NUM_DRONES):
-                p.createMultiBody(
-                    baseMass=0,
-                    baseInertialFramePosition=[0, 0, 0],
-                    baseVisualShapeIndex=waypointSphereId, 
-                    basePosition=env.INIT_XYZS[k, :] + points[wpt_ind] - xyz0_traj,
-                    useMaximalCoordinates=1
-                )
-    if trajSphereId is None:
-        trajSphereId = p.createVisualShape(
-            shapeType=p.GEOM_SPHERE, 
-            rgbaColor=[0, 0, 1, 1],
-            radius=sphereRadius*0.2
-        )
-        flightSphereId = p.createVisualShape(
-            shapeType=p.GEOM_SPHERE, 
-            rgbaColor=[0, 1, 0, 1],
-            radius=sphereRadius*0.2
-        )
-        return trajSphereId, flightSphereId
-    
-    if obs is not None:
-        for k in range(env.NUM_DRONES):
-            p.createMultiBody(
-                baseMass=0,
-                baseInertialFramePosition=[0, 0, 0],
-                baseVisualShapeIndex=flightSphereId, 
-                basePosition=obs[str(k)]["state"][:3],
-                useMaximalCoordinates=1
-            )
-            p.createMultiBody(
-                baseMass=0,
-                baseInertialFramePosition=[0, 0, 0],
-                baseVisualShapeIndex=trajSphereId, 
-                basePosition=target_pos[k],
-                useMaximalCoordinates=1
-            )
-
-
-def get_control(
-    env, ctrl, target_state, 
-    position_noise_model, velocity_noise_model, 
-    action, obs, CTRL_EVERY_N_STEPS
-):
+def get_control(trajectory, env, ctrl, config, target_state, obs, action):
     
     """
     Compute the controls in RPM
     """
-    pos_noise = position_noise_model.normal(loc=0., scale=0.01, size=(env.NUM_DRONES, 3))
+    # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
-    target_pos += pos_noise
+    target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"]
+    target_rpy = env.INIT_RPYS # TODO: @Andrew, generate target roll and pitch from acceleration?
+    target_rpy_rates = np.zeros_like(env.INIT_XYZS) # TODO: @Andrew, generate target roll and pitch rates from jerk?
 
-    vel_noise = velocity_noise_model.normal(loc=0., scale=0.001, size=(env.NUM_DRONES, 3))
-    target_vel = target_state["x_dot"]
-    target_vel = target_vel.reshape((1, 3)) + vel_noise
+    # # Apply noise to the targets
+    # pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
+    # target_pos += pos_noise
+    # vel_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_v, size=(env.NUM_DRONES, 3))
+    # target_vel += vel_noise
+    # rpy_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_r, size=(env.NUM_DRONES, 3))
+    # target_rpy = (Rotation.from_euler("xyz", rpy_noise, degrees=False) * Rotation.from_euler("xyz", target_rpy, degrees=False)).as_euler("xyz", degrees=False)
+    
+    # Collect Position Error
+    pos_error = np.zeros((env.NUM_DRONES, 3))
     for k in range(env.NUM_DRONES):
-        if np.any(env.INIT_RPYS != 0.0):
-            action[str(k)], _, _ = ctrl[k].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
-                                                                state=obs[str(k)]["state"],
-                                                                target_pos=target_pos[k],
-                                                                target_vel=target_vel[k],
-                                                                )
-        else:
-            action[str(k)], _, _ = ctrl[k].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
-                                                                state=obs[str(k)]["state"],
-                                                                target_pos=target_pos[k],
-                                                                target_vel=target_vel[k]
-                                                                )
-    return target_pos, target_vel, action
+        action[str(k)], pos_error[k], _ = ctrl[k].computeControlFromState(control_timestep=config.CONTROL_PERIOD_STEPS*env.TIMESTEP,
+                                                                          state=obs[str(k)]["state"],
+                                                                          target_pos=target_pos[k],
+                                                                          target_vel=target_vel[k],
+                                                                          target_rpy=target_rpy[k],
+                                                                          target_rpy_rates=target_rpy_rates[k]
+                                                                         )
+    return target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error
 
 
 #################### RUNNER ####################
 ################################################
 
 
-def run(
-        trajectory,
-        drone=DEFAULT_DRONES,
-        physics=DEFAULT_PHYSICS,
-        vision=DEFAULT_VISION,
-        gui=DEFAULT_GUI,
-        record_video=DEFAULT_RECORD_VISION,
-        plot=DEFAULT_PLOT,
-        user_debug_gui=DEFAULT_USER_DEBUG_GUI,
-        aggregate=DEFAULT_AGGREGATE,
-        obstacles=DEFAULT_OBSTACLES,
-        simulation_freq_hz=DEFAULT_SIMULATION_FREQ_HZ,
-        control_freq_hz=DEFAULT_CONTROL_FREQ_HZ,
-        colab=DEFAULT_COLAB
-        ):
+def track(trajectory, verbose=False):
     
     #### Initialize the simulation #############################
-    xyz0_traj = trajectory.update(0.)["x"]
-    t_duration = trajectory.t_start_vec.flatten()[-1]
-    position_noise_model = np.random.default_rng()
-    velocity_noise_model = np.random.default_rng()
-    AGGR_PHY_STEPS = int(simulation_freq_hz/control_freq_hz) if aggregate else 1
+    config = get_tracking_config(trajectory=trajectory)
 
-    env, logger, ctrl = initialize_run(
-        trajectory,
-        AGGR_PHY_STEPS,
-        drone=drone,
-        physics=physics,
-        vision=vision,
-        gui=gui,
-        record_video=record_video,
-        plot=plot,
-        user_debug_gui=user_debug_gui,
-        aggregate=aggregate,
-        obstacles=obstacles,
-        simulation_freq_hz=simulation_freq_hz,
-        control_freq_hz=control_freq_hz,
-        colab=colab
-    )
+    env, logger, ctrl = initialize_tracking(trajectory, config)
 
-    if env.NUM_DRONES == 1 and gui: #### Render Waypoints
-        flightSphereId, trajSphereId = render_markers(trajectory.points, env, xyz0_traj=xyz0_traj)
+    if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Render Waypoints
+        config = get_tracking_config(trajectory=trajectory)
+        render_markers(env, config, points=trajectory.points)
 
     #### Run the simulation ####################################
-    CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/control_freq_hz))
     action = {str(k): np.array([0,0,0,0]) for k in range(env.NUM_DRONES)}
     t_counter = 0
-    START = time.time()
-
-    for t_counter in range(0, int(t_duration*env.SIM_FREQ), AGGR_PHY_STEPS):
-    
-        #### Step the simulation ###################################
+    t_start = time.time()
+    while t_counter < int(config.T_HORIZON*env.SIM_FREQ):
+        
+        #### Step the simulation ###########################################################
         obs, reward, done, info = env.step(action)
 
-        #### Check if it looks like we are gonna crash #############
-        if np.any([obs[str(k)]["state"][2] <= DEFAULT_OFFSET for k in range(env.NUM_DRONES)]):
-            break
-
-        #### Compute control at the desired frequency ##############
-        if t_counter%CTRL_EVERY_N_STEPS == 0:
+        #### Compute control at the desired frequency ######################################
+        if t_counter%config.CONTROL_PERIOD_STEPS == 0:
             target_state = trajectory.update(t_counter*env.TIMESTEP)
-            target_state["x"] -= xyz0_traj # normalize
-            target_pos, target_vel, action = get_control(
-                env, ctrl, target_state, 
-                position_noise_model, velocity_noise_model, 
-                action, obs, CTRL_EVERY_N_STEPS
-            )
-            if env.NUM_DRONES == 1 and gui: #### Plot Trajectory and Flight
-                render_markers(
-                    trajectory.points, env, obs=obs, 
-                    trajSphereId=trajSphereId, flightSphereId=flightSphereId, 
-                    target_pos=target_pos
-                )
-
-        for k in range(env.NUM_DRONES): #### Log the simulation 
+            target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(trajectory, env, ctrl, config, target_state, obs, action)
+            if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Plot Trajectory and Flight
+                render_markers(env, config, obs=obs, target_pos=target_pos)
+            #### First check if we have finished our trajectory #############################
+            #### namely, current position <= 0.05m and current speed <= 0.05m/s #############
+            if trajectory.is_done and np.mean(np.linalg.norm(pos_error, axis=1)) <= 5e-2:
+                if np.mean(np.linalg.norm(env.vel.copy(), axis=1)) <= 5e-2:
+                    break
+            #### Then check if it looks like we are gonna crash ############################
+            elif np.any(env.pos.copy()[:, 2] <= config.OFFSET):
+                break
+        if env.PHYSICS.name == "dyn":
+            rpy_rates = env.rpy_rates.copy()
+        for k in range(env.NUM_DRONES): #### Log the simulation
+            #### If we are using the explicit dynamics model, set the angular velocity in the state to be the rpy_rates
+            if env.PHYSICS.name == "dyn":
+                obs[str(k)]["state"][13:16] = rpy_rates[k]
             logger.log(
                 drone=k,
                 timestamp=t_counter/env.SIM_FREQ,
                 state=obs[str(k)]["state"],
-                control=np.hstack([target_pos[k], np.zeros(3), target_vel[k], np.zeros(3)])
+                control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]]),
+                flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
             )
-        if t_counter%env.SIM_FREQ == 0: #### Printout
+        if verbose and t_counter%env.SIM_FREQ == 0: #### Printout
             env.render()
-            if vision: #### Print matrices with the images captured by each drone 
+            if config.VISION: #### Print matrices with the images captured by each drone 
                 for k in range(env.NUM_DRONES):
                     print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
                           obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
                           obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
                     )
 
-        if gui: #### Sync the simulation
-            sync(t_counter, START, env.TIMESTEP)
+        if config.GUI: #### Sync the simulation
+            sync(t_counter, t_start, env.TIMESTEP)
 
-    env.close() #### Close the environment
+        t_counter += config.AGGREGATE_PHY_STEPS # Propragate physics
+    env.close() #### Close the environments
     logger.save() #### Save the simulation results
-         
-
-
-if __name__ == "__main__":
-    #### Define and parse (optional) arguments for the script ##
-    parser = argparse.ArgumentParser(description='Trajectory Tracking Script')
-    parser.add_argument('--drone',              default=DEFAULT_DRONES,     type=DroneModel,    help='Drone model (default: CF2X)', metavar='', choices=DroneModel)
-    parser.add_argument('--physics',            default=DEFAULT_PHYSICS,      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
-    parser.add_argument('--vision',             default=DEFAULT_VISION,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
-    parser.add_argument('--gui',                default=DEFAULT_GUI,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
-    parser.add_argument('--record_video',       default=DEFAULT_RECORD_VISION,      type=str2bool,      help='Whether to record a video (default: False)', metavar='')
-    parser.add_argument('--plot',               default=DEFAULT_PLOT,       type=str2bool,      help='Whether to plot the simulation results (default: True)', metavar='')
-    parser.add_argument('--user_debug_gui',     default=DEFAULT_USER_DEBUG_GUI,      type=str2bool,      help='Whether to add debug lines and parameters to the GUI (default: False)', metavar='')
-    parser.add_argument('--aggregate',          default=DEFAULT_AGGREGATE,       type=str2bool,      help='Whether to aggregate physics steps (default: True)', metavar='')
-    parser.add_argument('--obstacles',          default=DEFAULT_OBSTACLES,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
-    parser.add_argument('--simulation_freq_hz', default=DEFAULT_SIMULATION_FREQ_HZ,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
-    parser.add_argument('--control_freq_hz',    default=DEFAULT_CONTROL_FREQ_HZ,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--colab',              default=DEFAULT_COLAB, type=bool,           help='Whether example is being run by a notebook (default: "False")', metavar='')
-    ARGS = parser.parse_args()
-
-    run(**vars(ARGS))
