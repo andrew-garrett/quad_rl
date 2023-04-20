@@ -25,7 +25,6 @@ TARGET_RPYS = np.array([0., 0., 0.])
 TARGET_STATE = np.hstack((INIT_XYZS, INIT_RPYS, np.zeros(6)))
 
 mppi_node = MPPI_Node.MPPI(mppi_config)
-# SAMPLE_TRAJECTORIES = np.zeros((mppi_config.T, mppi_config.K, mppi_config.X_SPACE))
 
 T_horizon = np.linspace(0, mppi_config.T_HORIZON, num=mppi_config.T+1)
 mppi_node.mppi_iter(INIT_STATE, TARGET_STATE)
@@ -45,22 +44,17 @@ for k in range(filtered_weights.shape[0]):
             ax[i].plot(T_horizon, filtered_samples[:, k, i], c=cm.jet(filtered_weights[k]))
 for i in range(3):
     ax[i].plot(T_horizon, mppi_node.SAMPLES_X[:, best_sample_ind, i], c=cm.jet(filtered_weights[best_sample_ind]), linewidth=2.0)
-
-
 plt.show()
 
 weight_cmap = np.vstack([filtered_weights  for t in range(mppi_config.T+1)]).flatten()
-p = plt.scatter(filtered_samples[:, :, 0], filtered_samples[:, :, 1], c=cm.jet(weight_cmap), edgecolor='none', linewidths=1)
-plt.colorbar(p)
+p = plt.scatter(filtered_samples[:, :, 0], filtered_samples[:, :, 1], c=cm.jet(weight_cmap), edgecolor='none')
 plt.show()
 
-# fig = plt.figure()
-# ax = fig.add_subplot(projection="3d")
-# ax.scatter(mppi_node.SAMPLES_X[:, :, 0], mppi_node.SAMPLES_X[:, :, 1], mppi_node.SAMPLES_X[:, :, 2], c=cm.jet(weight_cmap), edgecolor='none')
-# plt.show()
+fig = plt.figure()
+ax = fig.add_subplot(projection="3d")
+ax.scatter(filtered_samples[:, :, 0], filtered_samples[:, :, 1], filtered_samples[:, :, 2], c=cm.jet(weight_cmap), edgecolor='none')
+plt.show()
 
-# plt.plot(T_horizon, SAMPLE_TRAJECTORIES[:, :, 0])
-# plt.plot(T_horizon, SAMPLE_TRAJECTORIES[:, :, 0])
 
 
 # # dynamics_attributes = ["mass", "lateral_friction", "local_inertia_diagonal",

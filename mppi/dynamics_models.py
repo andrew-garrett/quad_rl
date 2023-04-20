@@ -125,7 +125,7 @@ class AnalyticalModel(DynamicsModel):
         f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
         f_thrust = d_R_w.apply(np.vstack((np.zeros_like(u1), np.zeros_like(u1), u1)).T) #force due to thrust, rotated into world frame
 
-        #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT)#TODO
+        #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT) #TODO
         F_sum = f_thrust - f_g # net force [N]
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
