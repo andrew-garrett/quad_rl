@@ -333,7 +333,7 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
 
                 index += 8
 
-        damp, atol, btol, maxiter = 0.01, 1e-8, 1e-8, 2500
+        damp, atol, btol, maxiter = 0.0, 1e-8, 1e-8, 5000
         Cx = lsmr(A, b[:, 0], damp=damp, atol=atol, btol=btol, maxiter=maxiter)
         Cy = lsmr(A, b[:, 1], damp=damp, atol=atol, btol=btol, maxiter=maxiter)
         Cz = lsmr(A, b[:, 2], damp=damp, atol=btol, btol=btol, maxiter=maxiter)

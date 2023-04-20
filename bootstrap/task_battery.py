@@ -86,8 +86,8 @@ FULL_TASK_BATTERY = {
             "res": [0.01, 0.05, 0.2],
             "speed": [LOW_SPEED, MED_SPEED, HIGH_SPEED],
             "trajectory_generator": [
-                "constant_speed", 
-                "cubic_spline", 
+                # "constant_speed", 
+                # "cubic_spline", 
                 "min_snap"
             ]
         }
@@ -128,8 +128,8 @@ CONTROLLED_TASK_BATTERY = {
             "res": [0.05, 0.2],
             "speed": [LOW_SPEED, MED_SPEED],
             "trajectory_generator": [
-                "constant_speed", 
-                "cubic_spline", 
+                # "constant_speed", 
+                # "cubic_spline", 
                 "min_snap"
             ]
         }
@@ -170,8 +170,8 @@ AGGRESSIVE_TASK_BATTERY = {
             "res": [0.05, 0.2],
             "speed": [AGGRO_MULTIPLIER*MED_SPEED, AGGRO_MULTIPLIER*HIGH_SPEED],
             "trajectory_generator": [
-                "constant_speed", 
-                "cubic_spline", 
+                # "constant_speed", 
+                # "cubic_spline", 
                 "min_snap"
             ]
         }
@@ -204,9 +204,9 @@ DEBUG_TASK_BATTERY = {
             "res": [0.25, 0.5],
             "speed": [MED_SPEED],
             "trajectory_generator": [
-                "constant_speed",
+                # "constant_speed",
                 # "cubic_spline", 
-                # "min_snap"
+                "min_snap"
             ]
         }
     }
