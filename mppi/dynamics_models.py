@@ -133,10 +133,6 @@ class AnalyticalModel(DynamicsModel):
         omega_dot = self.config.CF2X.J_INV @ (u2.T - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0))
         # omega_dot = np.dot(self.config.CF2X.J_INV, (u2 - np.cross(rpy_rates, np.dot(self.config.CF2X.J, rpy_rates.T).T).T).T).T
 
-        #Rotate back if using pybullet conventions #TODO
-        if not self.is_explicit:
-            omega_dot = d_R_w.apply(omega_dot)
-
         return state, accel, omega_dot
     
     def postprocess(self, output):
@@ -156,3 +152,33 @@ class AnalyticalModel(DynamicsModel):
         
         #format in shape of state and return 
         return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
+
+class SampleLearnedModel(DynamicsModel):
+    """
+    Sample Class for 
+    """
+    def __init__(self, config):
+        super().__init__(config)
+
+    def preprocess(self, state, u):
+        """
+        Preprocess state and control for network input
+        (normalize inputs, preprocess angles w/ sin and cos etc)
+        """
+        return 0 #preprocessed
+
+    def step_dynamics(self, input):
+        """
+        Compute Accelerations OR Delta State using trained Weights/Biases of Network
+        (Carry out forward pass of network)
+        """
+        acc = np.zeros((self.config.K, 6), dtype=self.config.DTYPE)
+        return acc
+
+    def postprocess(self, output):
+        """
+        Postprocess network outputs to obtain the resulting state in the state-space
+        If acceleration, apply kinematics, if delta state, add to input state
+        """
+        new_state = np.random.standard_normal(size=(self.config.K, self.config.X_SPACE))
+        return new_state
