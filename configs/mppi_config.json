@@ -7,9 +7,14 @@
     "T_HORIZON" : 2.5,
     "FREQUENCY" : 48,
     "TEMPERATURE" : 1.0,
-    "GAMMA" : 0.0,
+    "GAMMA" : 0.5,
     "ALPHA" : 0.1,
     "Q": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "NN_DATASET_ROOT": "./bootstrap/datasets",
+    "NN_DATASET_NAME": "AGGRO_000",
+    "NN_CKPT_PATH": "model_weights.ckpt",
+    "NN_CONFIG_PATH": "configs/training_config.json",
+    "MAX_RPM": 21702.6438,
     "DTYPE": "float32",
     "DYNAMICS_MODEL": "AnalyticalModel"
 }
