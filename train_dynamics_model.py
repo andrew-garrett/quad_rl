@@ -41,13 +41,13 @@ def parse_args():
     )
     parser.add_argument(
         "--config",
-        default="training_config.json",
+        default="configs/training_config.json",
         help="path_to_config_file",
         type=str
     )
     parser.add_argument(
         "--epochs",
-        default=10,
+        default=50,
         help="Number of training epochs",
         type=int
     )

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 ##########################################################
 
 
-DEFAULT_DATA_PATH = "./bootstrap/datasets/AGGRO_000"
+DEFAULT_DATA_PATH = "./bootstrap/datasets/dyn/AGGRO_000"
 DEFAULT_SEED      = 42
 DEFAULT_VAL_SPLIT = 0.2
 DEFAULT_MAX_RPM   = 21702.6438
@@ -132,7 +132,10 @@ def create_torch_dataset(
     """
     Create a torch dataset for a raw dataset of simulation data
     """
+    #config = get_mppi_config()
 
+    #Create dyanmics model object
+    #testAnalytical = AnalyticalModel(config)
     ##### Find Simulation Data, Create Train-Val Split, and Create Torch Dataset root
     search_path = os.path.join(dataset_path, "sim_data")
     sim_files   = glob.glob(f"{search_path}/*.npy")
@@ -146,6 +149,7 @@ def create_torch_dataset(
         'test': test_files
     }
     torch_data_path = os.path.join(dataset_path, "torch_dataset")
+    #breakpoint()
     os.makedirs(torch_data_path, exist_ok=True)
 
     for split, files in files_by_split.items():
@@ -162,13 +166,14 @@ def create_torch_dataset(
         for trial_fname in tqdm(files):
             
             file_contents = np.load(trial_fname)
-
+            #breakpoint()
             ##### Organize the data from the current flight trial
             states          = file_contents["states"]      # states, size=(num_drones, state_dim, num_samples)
             control_targets = file_contents["controls"]    # desired next states (control targets), size=(num_drones, control_target_dim, num_samples)
             timestamps      = file_contents["timestamps"]  # timestamps, size=(num_drones, num_samples)
             num_drones, state_dim, num_samples = states.shape
             control_target_dim = control_targets.shape[1]
+            #breakpoint()
 
             ##### Reorder the axes of each array (drones, samples, states/control_targets)
             states          = np.transpose(states, axes=(0,2,1))           # transpose operation, size=(num_drones, num_samples, state_dim)
@@ -185,12 +190,19 @@ def create_torch_dataset(
             ##### Process the current states: [p_x,p_y,p_z, v_x,v_y,v_z, euler_r,euler_p,euler_y, w_x,w_y,w_z, rpm_0,rpm_1,rpm_2,rpm_3]
             states_no_actions = states[:, :-1, :-4].reshape(-1, state_dim-4) # size=(num_drones*(num_samples-1), state_dim-4)
             actions           = states[:, 1:, -4:].reshape(-1, 4) # indices correspond to the action taken AT index the above states
+            #next_states_no_actions = states[:, 1:, :-4].reshape(-1, state_dim-4) # size=(num_drones*(num_samples-1), state_dim-4)
+            #state_diffs = next_states_no_actions - init_states_no_actions
             rpy = states_no_actions[:, 6:9] # size=(num_drones*(num_samples-1), 3)
             sin_rpy = np.sin(rpy)
             cos_rpy = np.cos(rpy)
+            #diff_rpy = state_diffs[:, 6:9] # size=(num_drones*(num_samples-1), 3)
+            #diff_sin_rpy = np.sin(diff_rpy)
+            #diff_cos_rpy = np.cos(diff_rpy)
             ##### Processed states: [sin(euler_r,euler_p,euler_y), cos(euler_r,euler_p,euler_y), v_x,v_y,v_z, w_x,w_y,w_z, rpm_0,rpm_1,rpm_2,rpm_3]
             states_processed = np.hstack([sin_rpy, cos_rpy, states_no_actions[:,3:6], states_no_actions[:, 9:12], actions])
+            #diffs_processed = np.hstack([diff_sin_rpy, diff_cos_rpy, state_diffs[:,3:6], state_diffs[:, 9:12]])
             # plot_states(states_processed[:, :-4])
+            #nn_gts = diffs_processed
 
             ##### Process the desired states: [p_x,p_y,p_z, euler_r,euler_p,euler_y, v_x,v_y,v_z, w_x,w_y,w_z]
             control_targets = control_targets[:, :-1, :].reshape(-1, control_target_dim) # size=(num_drones*(num_samples-1), control_target_dim)
@@ -199,6 +211,7 @@ def create_torch_dataset(
             cos_rpy = np.cos(rpy)
             ##### Processed desired states: [sin(euler_r,euler_p,euler_y), cos(euler_r,euler_p,euler_y), v_x,v_y,v_z, w_x,w_y,w_z]
             control_targets_processed = np.hstack([sin_rpy, cos_rpy, control_targets[:,6:]])
+            control_targets_processed = control_targets_processed[:, [0,1,2,5,6,8]] # select non-zero columns
 
             ##### Add the flight trial to the dataset
             all_states.append(torch.tensor(states_processed))
@@ -218,37 +231,40 @@ def create_torch_dataset(
         all_nn_gts = torch.cat(all_nn_gts, dim=0)
 
         ##### Save some sample plots of the raw training, validation, and testing datasets
-        sample_inds = plot_dataset(dataset_path, all_ids, all_states, all_control_targets, all_nn_gts, normed=False)
+        #sample_inds = plot_dataset(dataset_path, all_ids, all_states, all_control_targets, all_nn_gts, normed=False)
 
         ##### Min-Max Normalization
         all_states[:,-4:] = all_states[:,-4:] / max_rpm
-        state_min          = torch.min(all_states, dim=0).values
-        state_max          = torch.max(all_states, dim=0).values
-        control_target_min = torch.min(all_control_targets, dim=0).values
-        control_target_max = torch.max(all_control_targets, dim=0).values
-        nn_gt_min          = torch.min(all_nn_gts, dim=0).values
-        nn_gt_max          = torch.max(all_nn_gts, dim=0).values
+        if split == "train":
+            state_min          = torch.min(all_states, dim=0).values
+            state_max          = torch.max(all_states, dim=0).values
+            control_target_min = torch.min(all_control_targets, dim=0).values
+            control_target_max = torch.max(all_control_targets, dim=0).values
+            nn_gt_min          = torch.min(all_nn_gts, dim=0).values
+            nn_gt_max          = torch.max(all_nn_gts, dim=0).values
 
-        control_target_diff = control_target_max - control_target_min
-        control_target_diff[control_target_diff == 0] = 1
+            control_target_diff = control_target_max - control_target_min
+        #control_target_diff[control_target_diff == 0] = 1
         all_states = (all_states - state_min)/(state_max - state_min) * 2 - 1
         all_control_targets = (all_control_targets - control_target_min)/control_target_diff * 2 - 1
         all_nn_gts = (all_nn_gts - nn_gt_min)/(nn_gt_max - nn_gt_min) * 2 - 1
 
         ##### Save corresponding sample plots of the normalized training, validation, and testing datasets
-        plot_dataset(dataset_path, all_ids, all_states, all_control_targets, all_nn_gts, sample_inds=sample_inds)
+        #plot_dataset(dataset_path, all_ids, all_states, all_control_targets, all_nn_gts, sample_inds=sample_inds)
 
         ##### Save datasets in compressed format
         torch.save(all_states,          os.path.join(torch_data_path, f"{split}_states.pt"))
         torch.save(all_control_targets, os.path.join(torch_data_path, f"{split}_control_targets.pt"))
         torch.save(all_nn_gts,          os.path.join(torch_data_path, f"{split}_nn_gts.pt"))
+        #breakpoint()
         ##### Save minimums and maximums in compressed format
-        torch.save(state_min,           os.path.join(torch_data_path, f"{split}_state_min.pt"))
-        torch.save(control_target_min,  os.path.join(torch_data_path, f"{split}_control_target_min.pt"))
-        torch.save(nn_gt_min,           os.path.join(torch_data_path, f"{split}_nn_gt_min.pt"))
-        torch.save(state_max,           os.path.join(torch_data_path, f"{split}_state_max.pt"))
-        torch.save(control_target_max,  os.path.join(torch_data_path, f"{split}_control_target_max.pt"))
-        torch.save(nn_gt_max,           os.path.join(torch_data_path, f"{split}_nn_gt_max.pt"))
+        if split == "train":
+            torch.save(state_min,           os.path.join(torch_data_path, f"{split}_state_min.pt"))
+            torch.save(control_target_min,  os.path.join(torch_data_path, f"{split}_control_target_min.pt"))
+            torch.save(nn_gt_min,           os.path.join(torch_data_path, f"{split}_nn_gt_min.pt"))
+            torch.save(state_max,           os.path.join(torch_data_path, f"{split}_state_max.pt"))
+            torch.save(control_target_max,  os.path.join(torch_data_path, f"{split}_control_target_max.pt"))
+            torch.save(nn_gt_max,           os.path.join(torch_data_path, f"{split}_nn_gt_max.pt"))
     
 
 if __name__ == "__main__":
