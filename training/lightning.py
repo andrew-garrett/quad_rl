@@ -34,6 +34,10 @@ class DynamicsLightningModule(pl.LightningModule):
         }
         self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"), map_location="cuda")
         self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"), map_location="cuda")
+        self.nn_gt_range = self.nn_gt_max - self.nn_gt_min
+        self.accel_labels = [
+            "x", "y", "z", "r", "p", "y"
+        ]
     
     def parse_config(self):
         self.batch_size = self.config["training"]["batch_size"]
@@ -69,7 +73,7 @@ class DynamicsLightningModule(pl.LightningModule):
             "loss": loss
         }
         for i in range(self.output_size):
-            output_dict[f"error_{i+1}"] = errors[:,i]
+            output_dict[f"error_{self.accel_labels[i]}"] = errors[:,i]
         if stage == "train":
             self.log_metric(f"{stage}/loss", loss)
         self.step_outputs[stage].append(output_dict)
@@ -93,9 +97,20 @@ class DynamicsLightningModule(pl.LightningModule):
         outputs = self.step_outputs[stage]
         loss = torch.stack([x["loss"] for x in outputs]).mean()
         self.log_metric(f"{stage}/loss_epoch", loss)
+        error_xyz = []
+        error_rpy = []
         for i in range(self.output_size):
-            error_i = torch.cat([x[f"error_{i+1}"] for x in outputs]).mean()
-            self.log_metric(f"{stage}/error_{i+1}_epoch", error_i)
+            error_i = torch.cat([x[f"error_{self.accel_labels[i]}"] for x in outputs]).mean()
+            norm_error_i = torch.cat([x[f"error_{self.accel_labels[i]}"] for x in outputs]) / self.nn_gt_range[i]
+            norm_error_i = norm_error_i.mean()
+            self.log_metric(f"{stage}/error_{self.accel_labels[i]}_epoch", error_i)
+            self.log_metric(f"{stage}/norm_error_{self.accel_labels[i]}_epoch", norm_error_i)
+            if i < 3:
+                error_xyz.append(error_i)
+            else:
+                error_rpy.append(error_i)
+        self.log_metric(f"{stage}/error_xyz_epoch", sum(error_xyz)/3)
+        self.log_metric(f"{stage}/error_rpy_epoch", sum(error_rpy)/3)
         self.step_outputs[stage] = []
     
     def on_train_epoch_end(self):
