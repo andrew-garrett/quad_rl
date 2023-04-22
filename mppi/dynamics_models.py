@@ -3,10 +3,15 @@
 
 
 import numpy as np
+import os
+import torch
+import json
 
 from scipy.spatial.transform import Rotation
 
 import pybullet as p
+
+from ..training.lightning import DynamicsLightningModule
 
 #################### FUNCTIONAL DYNAMICS MODEL ####################
 ###################################################################
@@ -164,26 +169,75 @@ class SampleLearnedModel(DynamicsModel):
     """
     def __init__(self, config):
         super().__init__(config)
+        self.config = config
+        self.parse_config()
+
+        self.nn.eval()
+        self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"), map_location="cuda")
+        self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"), map_location="cuda")
+        self.state_min = torch.load(os.path.join(self.dataset_path, "train_state_min.pt"), map_location="cuda")
+        self.state_max = torch.load(os.path.join(self.dataset_path, "train_state_max.pt"), map_location="cuda")
+    
+    def parse_config(self):
+        self.dataset_path = os.path.join(self.config.NN_DATASET_ROOT, self.config.NN_DATASET_NAME, "torch_dataset")
+        self.nn_ckpt_path = self.config.NN_CKPT_PATH
+        self.training_config_path = self.config.NN_CONFIG_PATH
+        with open(self.training_config_path, "r") as f:
+            self.training_config = json.load(f)
+        self.nn = DynamicsLightningModule.load_from_checkpoint(self.nn_ckpt_path, config=self.training_config)
+        self.max_rpm = self.config.MAX_RPM
+    
+    def normalize(self, val, minval, maxval):
+        norm = (val - minval)/(maxval - minval)
+        norm = norm*2 - 1
+        return norm
+    
+    def denormalize(self, val, minval, maxval):
+        denorm = (val + 1)/2
+        denorm = (denorm*(maxval - minval)) + minval
+        return denorm
 
     def preprocess(self, state, u):
         """
         Preprocess state and control for network input
         (normalize inputs, preprocess angles w/ sin and cos etc)
         """
-        return 0 #preprocessed
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+
+        ## DIVIDE U BY MAX RPM
+        u /= self.max_rpm
+
+        nn_input = np.concatenate([np.sin(rpy), np.cos(rpy), velo, rpy_rates, u], axis=1)
+        nn_input = torch.tensor(nn_input)
+        nn_input_normalized = self.normalize(nn_input, self.state_min, self.state_max)
+        return state, nn_input_normalized #preprocessed
 
     def step_dynamics(self, input):
         """
         Compute Accelerations OR Delta State using trained Weights/Biases of Network
         (Carry out forward pass of network)
         """
-        acc = np.zeros((self.config.K, 6), dtype=self.config.DTYPE)
-        return acc
+        state, nn_input = input
+        with torch.no_grad():
+            nn_output = self.nn(nn_input)
+        return state, nn_output
 
     def postprocess(self, output):
-        """
-        Postprocess network outputs to obtain the resulting state in the state-space
-        If acceleration, apply kinematics, if delta state, add to input state
-        """
-        new_state = np.random.standard_normal(size=(self.config.K, self.config.X_SPACE))
-        return new_state
+        """Given the current state, control input, and time interval, propogate the state kinematics"""
+        #Decompose output and state
+        state, nn_output = output
+        nn_output_denormalized = self.denormalize(nn_output, self.nn_gt_min, self.nn_gt_max).numpy()
+        accel, omega_dot = (nn_output_denormalized[:,:3], nn_output_denormalized[:,3:])
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+        dt = self.config.DT
+        
+        #Apply kinematic equations (same way it is done in dynamics)
+        velo_dt = velo + accel * dt
+        xyz_dt = xyz + velo_dt * dt
+        
+        #same for rotation 
+        rpy_rates_dt = rpy_rates + omega_dot * dt 
+        rpy_dt = rpy + rpy_rates_dt * dt
+        
+        #format in shape of state and return 
+        return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
