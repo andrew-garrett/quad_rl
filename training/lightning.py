@@ -36,7 +36,7 @@ class DynamicsLightningModule(pl.LightningModule):
         self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"), map_location="cuda")
         self.nn_gt_range = self.nn_gt_max - self.nn_gt_min
         self.accel_labels = [
-            "x", "y", "z", "r", "p", "y"
+            "x", "y", "z", "roll", "pitch", "yaw"
         ]
     
     def parse_config(self):
