@@ -14,6 +14,7 @@ from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync
 
 from bootstrap.utils import get_tracking_config, render_markers
+from mppi.MPPIControl import MPPIControl
 
 
 #################### GLOBAL VARIABLES ####################
@@ -116,6 +117,7 @@ def initialize_tracking(trajectory, config):
 
     #### Initialize the controllers ############################
     ctrl = [DSLPIDControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
+    # ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
 
     return env, logger, ctrl
 
@@ -171,6 +173,8 @@ def track(trajectory, verbose=False):
     action = {str(k): np.array([0,0,0,0]) for k in range(env.NUM_DRONES)}
     t_counter = 0
     t_start = time.time()
+    t_swap = 2.0
+    t_horizon = 2.0
     while t_counter < int(config.T_HORIZON*env.SIM_FREQ):
         
         #### Step the simulation ###########################################################
@@ -178,7 +182,12 @@ def track(trajectory, verbose=False):
 
         #### Compute control at the desired frequency ######################################
         if t_counter%config.CONTROL_PERIOD_STEPS == 0:
-            target_state = trajectory.update(t_counter*env.TIMESTEP)
+            # if t_swap > 0 and t_swap < t_counter*env.TIMESTEP:
+            #     ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
+            #     t_swap = 0
+            # target_state = trajectory.update(t_counter*env.TIMESTEP)
+            target_state = trajectory.update(t_counter*env.TIMESTEP + 2.0*(t_swap == 0))
+
             target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(trajectory, env, ctrl, config, target_state, obs, action)
             if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Plot Trajectory and Flight
                 render_markers(env, config, obs=obs, target_pos=target_pos)
