@@ -211,6 +211,16 @@ class MPPI:
             self.noise_dist = lambda size: self.noise_dist_obj.rsample(size)
         self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
 
+    def reset(self, desired_state=None):
+        """
+        Resets the controller, unless an argument is given, where it only changes the set-point.
+        """
+        if desired_state is not None:
+            self.S.set_new_desired_state(desired_state)
+            return
+        self.SAMPLES_X = self.METHOD.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
+        self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
+
     def compute_weights(self):
         """
         Compute weights for importance sampling
@@ -232,13 +242,13 @@ class MPPI:
             - du: np.array(K, T, U_SPACE) - the control perturbations
         """
         weighted_samples = du.T @ self.weights
-        self.U += weighted_samples.T
-        # savgol_filter(
-        #     weighted_samples.T, 
-        #     window_length=int(np.sqrt(self.config.K)), 
-        #     polyorder=7, 
-        #     axis=0
-        # )
+        # self.U += weighted_samples.T
+        self.U += savgol_filter(
+            weighted_samples.T, 
+            window_length=int(0.1*self.config.T), 
+            polyorder=5, 
+            axis=0
+        )
 
     def command(self, state, shift_nominal_trajectory=True):
         """

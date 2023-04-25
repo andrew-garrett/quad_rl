@@ -153,7 +153,6 @@ def simulate(mppi_config, INIT_STATE, TARGET_STATE, verbose=False):
 
     # Return the total cost of the tracked trajectory (scalar)
     return tracked_trajectory_cost, optimal_trajectory_cost, None
-    # return tracked_trajectory_cost, optimal_trajectory_cost, None
 
 
 def simulate_and_plot(mppi_config, INIT_STATE, TARGET_STATE):
@@ -177,23 +176,27 @@ def simulate_and_plot(mppi_config, INIT_STATE, TARGET_STATE):
     tracked_trajectory_cost_arr = []
     filtered_weights_arr = []
     filtered_samples_arr = []
-    T_multiplier = 3
+    T_multiplier = 1
     with tqdm(total=T_multiplier*(mppi_config.T+1), postfix=[""]) as tq:
         for i, ts_i in enumerate(range(T_multiplier*(mppi_config.T+1))):
             if i == 0:
                 # Warm up the MPPI Trajectory before first action
-                for j in range(10):
+                for j in range(5):
                     mppi_test.step(state_tp1, shift_nominal_trajectory=False, verbose=True)
             state_tp1, control_t, tracked_trajectory_cost_t, optimal_trajectory_cost_t = mppi_test.step(state_tp1, verbose=True)
+            optimal_trajectory_arr.append(deepcopy(mppi_test.optimal_trajectory))
+            tracked_trajectory.append(deepcopy(state_tp1))
+            filtered_weights_arr.append(deepcopy(mppi_test.filtered_weights))
+            filtered_samples_arr.append(deepcopy(mppi_test.filtered_samples))
             if i < mppi_config.T+1:
                 # Track the optimal trajectory and its cost
-                optimal_trajectory_arr.append(deepcopy(mppi_test.optimal_trajectory))
+                # optimal_trajectory_arr.append(deepcopy(mppi_test.optimal_trajectory))
                 optimal_trajectory_cost_arr.append(optimal_trajectory_cost_t)
                 # Tracks the tracked trajectory and its cost
-                tracked_trajectory.append(deepcopy(state_tp1))
+                # tracked_trajectory.append(deepcopy(state_tp1))
                 tracked_trajectory_cost_arr.append(tracked_trajectory_cost_t)
                 # Tracks the good samples for visualization
-                filtered_weights_arr.append(deepcopy(mppi_test.filtered_weights))
+                # filtered_weights_arr.append(deepcopy(mppi_test.filtered_weights))
                 filtered_samples_arr.append(deepcopy(mppi_test.filtered_samples))
             # Print Stats
             tq.set_postfix_str(mppi_test.print_stats())
@@ -211,8 +214,8 @@ def simulate_and_plot(mppi_config, INIT_STATE, TARGET_STATE):
         TARGET_STATE, 
         optimal_trajectory_arr, 
         tracked_trajectory, 
-        filtered_weights_arr=filtered_weights_arr, 
-        filtered_samples_arr=filtered_samples_arr, 
+        # filtered_weights_arr=filtered_weights_arr, 
+        # filtered_samples_arr=filtered_samples_arr, 
         plot_interval=plot_interval, 
         save=True
     )
@@ -242,19 +245,20 @@ def plot_trajectories(INIT_STATE, TARGET_STATE, optimal_trajectory_arr, tracked_
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
     ax.set_zlabel("z (m)")
-    ax.set_xlim(-1.5, 1.5)
-    ax.set_ylim(-1.5, 1.5)
+    # ax.set_xlim(-1.5, 1.5)
+    # ax.set_ylim(-1.5, 1.5)
     ax.set_zlim(0, 1.5)
     ax.view_init(elev=30, azim=-135, roll=0)
 
     def animate(i):
         optimal_trajectory_line.set_data_3d(*optimal_trajectory_arr[i, :, :3].T)
         tracked_trajectory_line.set_data_3d(*tracked_trajectory[:i, :3].T)
-
+        ax.view_init(elev=30, azim=-135 + (180*i / optimal_trajectory_arr.shape[0]), roll=0)
         return optimal_trajectory_line, tracked_trajectory_line
 
     def animate_all(i):
         tracked_trajectory_line.set_data_3d(*tracked_trajectory[:i, :3].T)
+        ax.view_init(elev=30, azim=-135 + (180*i / optimal_trajectory_arr.shape[0]), roll=0)
         for j, line in enumerate(filtered_samples_lines):
             line.set_data_3d(filtered_samples_arr[i, :, j, :3].T)
             # line.set_color(filtered_weight_cmap[i, j])
@@ -279,7 +283,7 @@ if __name__ == "__main__":
     INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, np.zeros(6)))
 
     ##### Initial State
-    TARGET_XYZS = np.array([1., 1., 1.,])
+    TARGET_XYZS = np.array([5., 5., 1.,])
     TARGET_RPYS = np.array([0., 0., 0.])
     TARGET_STATE = np.hstack((TARGET_XYZS, TARGET_RPYS, np.zeros(6)))
 

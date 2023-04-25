@@ -66,13 +66,11 @@ class CostModel:
             self.SYSTEM_NOISE_INV = self.SYSTEM_NOISE_INV.to(device=self.config.DEVICE)
             self.U_SHAPE_ARR = self.U_SHAPE_ARR.to(device=self.config.DEVICE)
 
-
     def set_new_desired_state(self, state_des):
         self.state_des = self.METHOD.asarray(state_des, dtype=self.config.DTYPE) # CP and NP and TORCH
         if len(state_des.shape) <= 1:
             self.state_des = self.state_des.reshape(1, -1) # CP and NP and TORCH
         
-
     def compute_state_cost(self, state):
         """
         Compute state-dependent cost
@@ -81,7 +79,7 @@ class CostModel:
             state = state.reshape(1, -1)
         delta_x = self.state_des - state
         state_cost = self.METHOD.einsum("ij,kj,ik->i", delta_x, self.Q, delta_x) # dx^T @ Q @ dx
-        state_cost += 1e6*self.METHOD.sum(state[:, 2] <= 0) # if len(state_cost.shape) == 1 else 1e6*(state[2] <= 0) # CRASH COST
+        state_cost += 1e10*self.METHOD.sum(state[:, 2] <= 0) # if len(state_cost.shape) == 1 else 1e6*(state[2] <= 0) # CRASH COST
         return state_cost
 
     def compute_control_cost(self, u):
@@ -97,9 +95,10 @@ class CostModel:
         COST = GAMMA * ((u_tm1 - NOMINAL_U) @ SYSTEM_NOISE @ dU))
         """
         u_tm1, du = u
-        u_tm1 = (u_tm1 - self.config.CF2X.HOVER_RPM) / self.config.CF2X.MAX_RPM
+        # u_tm1 = (u_tm1 - self.config.CF2X.HOVER_RPM) / self.config.CF2X.MAX_RPM
+        u_tm1 = u_tm1 / self.config.CF2X.MAX_RPM
         du = du / self.config.CF2X.MAX_RPM
-        du = self.METHOD.abs(du) # This is optional??
+        # du = self.METHOD.abs(du) # This is optional??
         self.U_SHAPE_ARR = self.METHOD.broadcast_to(u_tm1, self.U_SHAPE_ARR.shape)
         control_cost = self.METHOD.einsum("ij,kj,ik->i", self.U_SHAPE_ARR, self.SYSTEM_NOISE_INV, du)
         return self.config.TEMPERATURE * control_cost

@@ -58,73 +58,22 @@ Although, this behavior makes some sense because of how we are currently computi
 control perturbation are all considered in RPM.  When taking that term away, the control-cost term can explode.  Now that I think of
 this, the normalizing factor should be MAX_RPM, not MAX_RPM**2.  We want to normalize each of the terms independently.  Regardless,
 
-
-
 This results in models biasing toward low-noise.  Coupled with this is the fact that allowing a tuner to vary the time-horizon.
 means that it will also minimize this quantity.  One thing we should do is just set T_horizon to 1.0.
 
 In order to mitigate the dominanace of the control term in the cost function, I have a couple ideas:
 1. Ensure that both the delta_x term (in the state-dependent cost) and the u_tm1
+
+
+Evaluation:
+
+Start at hover.  Set target positions to be 2 meters away in +/-x, +/-y, and the diagonals.  Set target velocity to be the distance over the time horizon.
+At the start of a test, perform several iterations of MPPI as warmup (not rolling the controls) and measure the cost of the optimal rollout at the start.
+Then simulate MPPI for T-horizon timesteps and measure the state-cost for the final timestep.
+
 """
-import mppi.cost_models as cost_models
-import mppi.dynamics_models as dynamics_models
-import mppi.MPPI_Node as MPPI_Node
-from mppi.testMPPI import simulate
 
-NUM_TRIALS = 1
-
-
-def evaluate(num_trials=NUM_TRIALS, sweep_config_path=None):
-
-    if sweep_config_path is None:
-        config_fpath = "./configs/mppi_config.json"
-    else:
-        # Sets the parameters of the MPPI config according to wandb sweep
-        config_fpath = sweep_config_path
-        logging_config = {
-            "reinit": True,
-            "project": "ESE650 Final Project",
-            "group": "Unit Step MPPI Tuning"
-        }
-        run = wandb.init(**logging_config)
-    costs = {
-        "tracked_trajectory_cost": [],
-        "mean_optimal_trajectory_cost": [],
-        "sample_trajectories": []
-    }
-
-    # evaluate over a diverse dataset of trajectories
-    ##### Initial State
-    INIT_XYZS = np.array([0., 0., 1.,])
-    INIT_RPYS = np.array([0., 0., 0.])
-    INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, np.zeros(6)))
-
-    grid_positions = np.indices((3, 3, 3))
-    grid_positions -= grid_positions[:, 1, 1, 1]
-    grid_positions = grid_positions.reshape(3, -1).T + INIT_XYZS
-    TARGET_STATES = np.zeros((grid_positions.shape[0], 12))
-    TARGET_STATES[:, :3] = grid_positions
-    verbose_index = np.random.randint(0, TARGET_STATES.shape[0], 3)
-    with tqdm(total=num_trials*TARGET_STATES.shape[0], postfix=[""]) as tq:
-        for i, TARGET_STATE in enumerate(TARGET_STATES):
-            for j in range(num_trials):
-                # Get a fresh MPPI Config
-                mppi_config = MPPI_Node.get_mppi_config(config_fpath)
-                tracked_trajectory_cost, mean_optimal_trajectory_cost, gif_fps = simulate(mppi_config, deepcopy(INIT_STATE), deepcopy(TARGET_STATE), verbose=(i in verbose_index))
-                costs["tracked_trajectory_cost"].append(tracked_trajectory_cost)
-                costs["mean_optimal_trajectory_cost"].append(mean_optimal_trajectory_cost)
-                if gif_fps is not None and sweep_config_path is not None:
-                    wandb.log({"sample_trajectory": wandb.Video("./trajectory.gif", fps=int(mppi_config.FREQUENCY))})
-                tq.update()
-    costs["tracked_trajectory_cost_arr"] = np.array([np.mean(cost_arr) for cost_arr in costs["tracked_trajectory_cost"]])
-    costs["tracked_trajectory_cost"] = np.mean(costs["tracked_trajectory_cost_arr"]) / np.linalg.norm(costs["tracked_trajectory_cost_arr"])
-    costs["mean_optimal_trajectory_cost_arr"] = np.array([np.mean(cost_arr) for cost_arr in costs["mean_optimal_trajectory_cost"]])
-    costs["mean_optimal_trajectory_cost"] = np.mean(costs["mean_optimal_trajectory_cost_arr"]) / np.linalg.norm(costs["mean_optimal_trajectory_cost_arr"])
-    costs["total_cost"] = costs["tracked_trajectory_cost"]+costs["mean_optimal_trajectory_cost"]
-    if sweep_config_path is not None:
-        wandb.log(costs)
-    return costs
-
+from testMPPI_v2 import evaluate
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -149,6 +98,71 @@ if __name__ == "__main__":
         eval_dict = evaluate() # sweep_config_path="./configs/mppi_config.json"
         for k, v in eval_dict.items():
             print(k, v)
+
+
+
+# import mppi.cost_models as cost_models
+# import mppi.dynamics_models as dynamics_models
+# import mppi.MPPI_Node as MPPI_Node
+# from mppi.testMPPI import simulate
+
+# NUM_TRIALS = 1
+
+
+# def evaluate(num_trials=NUM_TRIALS, sweep_config_path=None):
+
+#     if sweep_config_path is None:
+#         config_fpath = "./configs/mppi_config.json"
+#     else:
+#         # Sets the parameters of the MPPI config according to wandb sweep
+#         config_fpath = sweep_config_path
+#         logging_config = {
+#             "reinit": True,
+#             "project": "ESE650 Final Project",
+#             "group": "Unit Step MPPI Tuning (Savgol Filter)"
+#         }
+#         wandb_run = wandb.init(**logging_config)
+#     costs = {
+#         "tracked_trajectory_cost": [],
+#         "mean_optimal_trajectory_cost": [],
+#         "sample_trajectories": []
+#     }
+
+#     # evaluate over a diverse dataset of trajectories
+#     ##### Initial State
+#     INIT_XYZS = np.array([0., 0., 1.,])
+#     INIT_RPYS = np.array([0., 0., 0.])
+#     INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, np.zeros(6)))
+
+#     grid_positions = np.indices((3, 3, 3))
+#     grid_positions = grid_positions.reshape(3, -1).T
+#     TARGET_STATES = np.zeros((grid_positions.shape[0], 12))
+#     TARGET_STATES[:, :3] = grid_positions
+#     TARGET_STATES = TARGET_STATES[TARGET_STATES[:, 2] == INIT_XYZS[2], :]
+
+#     verbose_index = np.random.randint(0, TARGET_STATES.shape[0], 3)
+#     with tqdm(total=num_trials*TARGET_STATES.shape[0], postfix=[""]) as tq:
+#         for i, TARGET_STATE in enumerate(TARGET_STATES):
+#             if not np.all(TARGET_STATE == INIT_STATE):
+#                 for j in range(num_trials):
+#                     # Get a fresh MPPI Config
+#                     mppi_config = MPPI_Node.get_mppi_config(config_fpath)
+#                     tracked_trajectory_cost, mean_optimal_trajectory_cost, gif_fps = simulate(mppi_config, deepcopy(INIT_STATE), deepcopy(TARGET_STATE), verbose=(i in verbose_index))
+#                     costs["tracked_trajectory_cost"].append(tracked_trajectory_cost)
+#                     costs["mean_optimal_trajectory_cost"].append(mean_optimal_trajectory_cost)
+#                     if gif_fps is not None and sweep_config_path is not None:
+#                         wandb.log({"sample_trajectory": wandb.Video("./trajectory.gif", fps=int(mppi_config.FREQUENCY))})
+#                     tq.update()
+#     costs["tracked_trajectory_cost_arr"] = [np.mean(cost_arr) for cost_arr in costs["tracked_trajectory_cost"]]
+#     costs["tracked_trajectory_cost"] = np.mean(costs["tracked_trajectory_cost_arr"]) / np.linalg.norm(costs["tracked_trajectory_cost_arr"])
+#     costs["mean_optimal_trajectory_cost_arr"] = [np.mean(cost_arr) for cost_arr in costs["mean_optimal_trajectory_cost"]]
+#     costs["mean_optimal_trajectory_cost"] = np.mean(costs["mean_optimal_trajectory_cost_arr"]) / np.linalg.norm(costs["mean_optimal_trajectory_cost_arr"])
+#     costs["total_cost"] = costs["tracked_trajectory_cost"]+costs["mean_optimal_trajectory_cost"]
+#     if sweep_config_path is not None:
+#         wandb.log(costs)
+#     return costs
+
+
 
 
 
