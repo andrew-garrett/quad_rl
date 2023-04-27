@@ -166,7 +166,7 @@ class MPPITest_v2:
         # Rollout Trajectories
         ax.plot(*rollouts[0][0][:, :3].T, c="k", label="Optimal Trajectory")
         for i in range(1, len(rollouts)):
-            ax.plot(*rollouts[i][0][:, :3].T, c="b")
+            ax.plot(*rollouts[i][0][:, :3].T, c="k")
         
         # Target State
         if target_state is not None:
@@ -189,7 +189,7 @@ class MPPITest_v2:
             wandb.log({"Sample Trajectories": wandb.Image("./trajectory.png")})
         return fig, ax
         
-    def log_results(self, results_dict, wandb_run=None):
+    def log_results(self, results_dict, target_state=None, wandb_run=None):
         """
         Log the results, optionally to wandb
         """
@@ -197,8 +197,12 @@ class MPPITest_v2:
         rollouts = results_dict["rollout"]
         mppi_hz = results_dict["mppi_hz"]
 
-        mean_rollout_terminal_cost = np.mean([r[1][-1] for r in rollouts])
-        mean_tracked_terminal_cost = np.mean([t[1][-1] for t in tracked_trajectories])
+        if target_state is not None:
+            mean_rollout_terminal_cost = np.mean([np.linalg.norm(r[0][-1] - target_state) for r in rollouts])
+            mean_tracked_terminal_cost = np.mean([np.linalg.norm(t[0][-1] - target_state) for t in tracked_trajectories])
+        else:
+            mean_rollout_terminal_cost = np.mean([r[1][-1] for r in rollouts])
+            mean_tracked_terminal_cost = np.mean([t[1][-1] for t in tracked_trajectories])
         mean_mppi_hz = np.mean(mppi_hz)
 
         log_dict = {
@@ -234,7 +238,7 @@ class MPPITest_v2:
     
 
 
-def evaluate(num_trials=1, sweep_config_path=None):
+def evaluate(num_trials=3, sweep_config_path=None):
     """
     Evaluation of MPPI on a set of simple "trajectories"
 
@@ -293,10 +297,10 @@ def evaluate(num_trials=1, sweep_config_path=None):
                 for (init_state, target_state) in init_target_pairs:
                     combined_results = mppi_test_v2.run_trials(num_trials, init_state, target_state=target_state, traj=None)
                     if i in verbose_inds:
-                        logs.append(mppi_test_v2.log_results(combined_results, wandb_run=wandb_run))
+                        logs.append(mppi_test_v2.log_results(combined_results, target_state=target_state, wandb_run=wandb_run))
                         mppi_test_v2.plot_results(combined_results, target_state=target_state, wandb_run=wandb_run)
                     else:
-                        logs.append(mppi_test_v2.log_results(combined_results))
+                        logs.append(mppi_test_v2.log_results(combined_results, target_state=target_state))
             tq.update()
     
     ##### Log summary metrics
