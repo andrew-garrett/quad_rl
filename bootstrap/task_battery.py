@@ -11,12 +11,12 @@ import numpy as np
 
 
 NO_SPEED = 0.0 # m/s
-BASE_SPEED = 1.0 # m/s
+BASE_SPEED = 0.5 # m/s
 LOW_SPEED = 0.5*BASE_SPEED # m/s
 MED_SPEED = 1.0*BASE_SPEED # m/s
 HIGH_SPEED = 1.5*BASE_SPEED # m/s
 AGGRO_MULTIPLIER = 1.5
-NUM_DRONES = 3 # number of drones along a single axis of a 3D cube configuration
+NUM_DRONES = 1 # number of drones along a single axis of a 3D cube configuration
 
 DEFAULT_ROOT = "./bootstrap/datasets/pyb/"
 DEFAULT_TASK_NAME = "linear_step.csv"
@@ -182,12 +182,12 @@ DEBUG_TASK_BATTERY = {
         "taskcase_generator": "generate_figure_eight_tasks",
         "params": {
             "num_drones": NUM_DRONES,
-            "ax": ["z"],
-            "dh": [1.0, 2.0],
+            "ax": ["y"],
+            "dh": [0.0],
             "radii": [1.0, 2.0],
             "rdp_threshold": [0.025, 0.1, 0.25],
             "res": [0.25, 0.5],
-            "speed": [MED_SPEED],
+            "speed": [LOW_SPEED],
             "trajectory_generator": [
                 # "constant_speed",
                 # "cubic_spline", 

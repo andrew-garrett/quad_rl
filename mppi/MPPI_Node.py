@@ -6,16 +6,23 @@ import os
 import sys
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 import json
+from copy import deepcopy
 from collections import namedtuple
 import xml.etree.ElementTree as etxml
 try:
     import cupy as cp
+    """
+        To migrate to cupy over numpy, we need the following commands from cupy:
+            np.array() <-> cp.array()
+            np.sum(x, axis, dtype) <-> cp.sum(x, axis, dtype)
+    """
 except:
     print("cupy not available, defaulting to np/torch")
 import numpy as np
-import torch
 from scipy.signal import savgol_filter
-
+import torch
+from torch.distributions.multivariate_normal import MultivariateNormal
+import torch.random
 import mppi.dynamics_models as dynamics_models
 import mppi.cost_models as cost_models
 
@@ -37,15 +44,44 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     with open(config_fpath, "r") as f:
         config_dict = json.load(f)
 
-    # Set derived/processed parameters
-    config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
-    config_dict["DTYPE"] = getattr(np, config_dict["DTYPE"])
-    config_dict["Q"] = np.diag(config_dict["Q"])
-    config_dict["U_NOMINAL"] = config_dict["HOVER_RPM"] * np.ones(config_dict["U_SPACE"], dtype=config_dict["DTYPE"])
-    config_dict["U_SIGMA_ARR"] = np.linalg.inv(config_dict["U_SIGMA"] * np.eye(config_dict["U_SPACE"], dtype=config_dict["DTYPE"]))
-    config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
     # Get URDF parameters
     config_dict["CF2X"] = parseURDFParameters(os.path.join(os.path.dirname(config_fpath), "cf2x.urdf"))
+    # Set derived/processed parameters
+    config_dict["DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
+    config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
+    config_dict["METHOD"] = config_dict["METHOD"].lower()
+    if config_dict["METHOD"] in ("torch", "cupy"):
+        config_dict["DYNAMICS_MODEL"] = config_dict["METHOD"].capitalize() + config_dict["DYNAMICS_MODEL"]
+        if "cupy" in config_dict["METHOD"]:
+            config_dict["METHOD"] = cp
+            config_dict["DTYPE"] = getattr(np, config_dict["DTYPE"])
+        else:
+            config_dict["METHOD"] = torch
+            config_dict["DTYPE"] = getattr(config_dict["METHOD"], config_dict["DTYPE"])
+    else: 
+        config_dict["METHOD"] = np
+        config_dict["DTYPE"] = getattr(config_dict["METHOD"], config_dict["DTYPE"])
+
+    # For wandb sweeps
+    if "Q" not in config_dict.keys():
+        Q = np.ones(config_dict["X_SPACE"])
+        if "Q_p" in config_dict.keys():
+            Q[:3] = np.array([config_dict["Q_p"] for i in range(3)])
+        if "Q_r" in config_dict.keys():
+            Q[3:6] = np.array([config_dict["Q_r"] for i in range(3)])
+        if "Q_v" in config_dict.keys():
+            Q[6:9] = np.array([config_dict["Q_v"] for i in range(3)])
+        if "Q_w" in config_dict.keys():
+            Q[9:12] = np.array([config_dict["Q_w"] for i in range(3)])
+        config_dict["Q"] = Q
+
+    config_dict["Q"] = np.diag(config_dict["Q"])
+    
+    config_dict["U_NOMINAL"] = config_dict["CF2X"].HOVER_RPM * np.ones(config_dict["U_SPACE"])
+    config_dict["SYSTEM_BIAS"] = config_dict["SYSTEM_BIAS"] * np.ones(config_dict["U_SPACE"])
+    config_dict["SYSTEM_NOISE"] = config_dict["SYSTEM_NOISE"] * np.eye(config_dict["U_SPACE"])
+    config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
+    config_dict["DISCOUNT"] = 1.0 - config_dict["DT"]
 
     config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return config
@@ -88,9 +124,10 @@ def parseURDFParameters(urdf_fpath="./configs/cf2x.urdf"):
     DW_COEFF_3 = float(URDF_TREE[0].attrib['dw_coeff_3'])
     
     # Include MAX_RPM and HOVER_RPM
-    MAX_RPM = 21702.644
-    GRAVITY = 9.8*M
+    G = 9.8
+    GRAVITY = G*M
     HOVER_RPM = np.sqrt(GRAVITY / (4*KF))
+    MAX_RPM = np.sqrt((THRUST2WEIGHT_RATIO*GRAVITY) / (4*KF))
     # Put these parameters into a dictionary
     config_dict = locals()
     # Remove unneccesary values
@@ -110,7 +147,7 @@ U_NOMINAL = [HOVER_RPM, HOVER_RPM, HOVER_RPM, HOVER_RPM] # =========== NOMINAL C
 X_SPACE = 12 # ======================================================= STATE SPACE (x,y,z, r,p,y, v_x,v_y,v_z, w_x,w_y,w_z)
 U_SPACE = 4 # ======================================================== CONTROL SPACE
 U_SIGMA = 10. # ====================================================== CONTROL NOISE
-U_SIGMA_ARR = np.linalg.inv(U_SIGMA * np.eye(U_SPACE)) =============== CONTROL-COST COVARIANCE
+SYSTEM_NOISE = np.linalg.inv(U_SIGMA * np.eye(U_SPACE)) ============== CONTROL-COST COVARIANCE
 
 K = 512 # ============================================================ NUMBER OF TRAJECTORIES TO SAMPLE
 T_HORIZON = 2.5 # ==================================================== TIME HORIZON
@@ -135,28 +172,54 @@ class MPPI:
     """
     Class to perform MPPI Algorithm
     """
-    def __init__(self, config) -> None:
+    def __init__(self, config, state_des) -> None:
 
         # Set MPPI Parameters
         self.config = config
+        self.METHOD = self.config.METHOD
 
         # Functional Dynamics Model
         try:
-            self.F = getattr(dynamics_models, self.config.DYNAMICS_MODEL)(self.config)
+            f_config = self.config
+            self.F = getattr(dynamics_models, f_config.DYNAMICS_MODEL)(f_config)
         except:
-            self.F = dynamics_models.DynamicsModel(self.config)
+            self.F = dynamics_models.DynamicsModel(f_config)
         
         # Functional Cost Model
         try:
-            self.S = getattr(cost_models, self.config.COST_MODEL)(self.config)
+            s_config = self.config
+            self.S = getattr(cost_models, self.config.COST_MODEL)(s_config, state_des=state_des)
         except:
-            self.S = cost_models.CostModel(self.config)
+            self.S = cost_models.CostModel(s_config, state_des=state_des)
 
         # Pre-allocate data structures
-        self.COST_MAP = np.zeros(self.config.K, dtype=self.config.DTYPE)
-        self.SAMPLES_X = np.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
-        self.U = np.zeros((self.config.T, self.config.U_SPACE), dtype=self.config.DTYPE)
-        self.U[:] = self.config.U_NOMINAL
+        self.COST_MAP = self.METHOD.zeros(self.config.K, dtype=self.config.DTYPE)
+        self.SAMPLES_X = self.METHOD.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
+        self.U = self.METHOD.zeros((self.config.T, self.config.U_SPACE), dtype=self.config.DTYPE)
+        U_NOMINAL = self.METHOD.asarray(self.config.U_NOMINAL, dtype=self.config.DTYPE)
+        if self.METHOD.__name__ in ("numpy", "cupy"):
+            self.U_NOMINAL = U_NOMINAL.copy()
+            self.SYSTEM_BIAS = self.METHOD.asarray(self.config.SYSTEM_BIAS, dtype=self.config.DTYPE)
+            self.mu_sigma = (self.SYSTEM_BIAS, self.METHOD.asarray(self.config.SYSTEM_NOISE, dtype=self.config.DTYPE))
+            self.noise_dist = lambda size: self.METHOD.random.multivariate_normal(self.mu_sigma[0], self.mu_sigma[1], size)
+        else:
+            self.U_NOMINAL = U_NOMINAL.clone().to(device=self.config.DEVICE)
+            self.SYSTEM_BIAS = self.METHOD.asarray(self.config.SYSTEM_BIAS).to(device=self.config.DEVICE, dtype=self.config.DTYPE)
+            self.mu_sigma = (self.SYSTEM_BIAS, self.METHOD.asarray(self.config.SYSTEM_NOISE).to(device=self.config.DEVICE, dtype=self.config.DTYPE))
+            self.COST_MAP, self.SAMPLES_X, self.U = self.COST_MAP.to(self.config.DEVICE), self.SAMPLES_X.to(self.config.DEVICE), self.U.to(self.config.DEVICE)
+            self.noise_dist_obj = torch.distributions.MultivariateNormal(loc=self.mu_sigma[0], covariance_matrix=self.mu_sigma[1])
+            self.noise_dist = lambda size: self.noise_dist_obj.rsample(size)
+        self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
+
+    def reset(self, desired_state=None):
+        """
+        Resets the controller, unless an argument is given, where it only changes the set-point.
+        """
+        if desired_state is not None:
+            self.S.set_new_desired_state(desired_state)
+            return
+        self.SAMPLES_X = self.METHOD.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
+        self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
 
     def compute_weights(self):
         """
@@ -165,10 +228,10 @@ class MPPI:
         Returns:
             weights: np.array(K) - the importance sampling weights
         """
-        rho = np.min(self.COST_MAP)
+        rho = self.METHOD.min(self.COST_MAP)
         min_normed_cost_map = self.COST_MAP - rho
-        weights = np.exp(-(self.config.TEMPERATURE**-1)*min_normed_cost_map)
-        self.weights = weights / np.sum(weights)
+        weights = self.METHOD.exp(-(self.config.TEMPERATURE**-1)*min_normed_cost_map)
+        self.weights = weights / self.METHOD.sum(weights)
     
     def smooth_controls(self, du):
         """
@@ -179,14 +242,15 @@ class MPPI:
             - du: np.array(K, T, U_SPACE) - the control perturbations
         """
         weighted_samples = du.T @ self.weights
+        # self.U += weighted_samples.T
         self.U += savgol_filter(
             weighted_samples.T, 
-            window_length=int(np.sqrt(self.config.K)), 
-            polyorder=7, 
+            window_length=int(0.1*self.config.T), 
+            polyorder=5, 
             axis=0
         )
 
-    def mppi_iter(self, state, desired_state):
+    def command(self, state, shift_nominal_trajectory=True):
         """
         Perform an iteration of MPPI
 
@@ -196,37 +260,29 @@ class MPPI:
         Returns:
             - next_control: np.array(U_SPACE) - the next optimal control to execute
         """
+        # Reset for the current iteration
+        self.COST_MAP = self.METHOD.zeros_like(self.COST_MAP)
+
         # sample random control perturbations
-        try:
-            du = cp.asnumpy(
-                cp.random.normal(
-                    loc=0., 
-                    scale=self.config.U_SIGMA, 
-                    size=(self.config.K, self.config.T, self.config.U_SPACE), 
-                    dtype=self.config.DTYPE
-                )
-            )
-        except:
-            du = np.random.normal(
-                loc=0., 
-                scale=self.config.U_SIGMA, 
-                size=(self.config.K, self.config.T, self.config.U_SPACE)
-            )
-        
-        # prepare to sample in parallel
-        self.SAMPLES_X[0, :] = state
+        du = self.noise_dist((self.config.K, self.config.T))
+        if self.METHOD.__name__ in ("cupy", "numpy"):
+            self.SAMPLES_X[0, :] = self.METHOD.array(state)
+        else:
+            self.SAMPLES_X[0, :] = state.clone()
 
         # iteratively sample T-length trajectories, K times in parallel
+        curr_discount = 1.0
         for t in range(1, self.config.T+1):
-            # Get the current optimal control
+            curr_discount *= self.config.DISCOUNT
+            # Get the current control
             u_tm1 = self.U[t-1]
-            # Perturb the current optimal control
-            v_tm1 = u_tm1 + du[:, t-1, :]
-            # Approximate the next state for the perturbed optimal control
+            # Perturb the current control
+            du_tm1 = du[:, t-1, :]
+            v_tm1 = u_tm1 + du_tm1
+            # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
-            # yield deepcopy(self.SAMPLES_X)
-            # Compute the cost of taking the perturbed optimal control
-            self.COST_MAP += self.S(self.SAMPLES_X[t], desired_state, u_tm1, v_tm1)
+            # Compute the cost of taking the perturbed optimal control (DISCOUNTED BY HOW FAR THROUGH THE TRAJECTORY WE ARE)
+            self.COST_MAP += curr_discount*self.S(self.SAMPLES_X[t], (u_tm1, du_tm1))
 
         # Compute the importance sampling weights
         self.compute_weights()
@@ -236,11 +292,11 @@ class MPPI:
 
         # Get the next control
         next_control = self.U[0]
+        if shift_nominal_trajectory:
+            # Roll the controls
+            self.U = self.METHOD.roll(self.U, -1, 0)
+            self.U[-1] = self.U_NOMINAL
         
-        # Roll the controls
-        self.U = np.roll(self.U, shift=-1, axis=0)
-        self.U[-1] = self.config.U_NOMINAL
-
         return next_control
     
 
@@ -257,5 +313,5 @@ if __name__ == "__main__":
     xdes = np.zeros_like(x0, dtype=mppi_config.DTYPE)
     xdes[2] = 2.
 
-    next_control = mppi_node.mppi_iter(x0, xdes)
+    next_control = mppi_node.command(x0, xdes)
     print(next_control)

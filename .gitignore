@@ -1,15 +1,14 @@
 gym-pybullet-drones/
-results/
+
+
 __pycache__/
-
-bootstrap/
-training/
-
-datasets/
-
 .vscode/
 .conda/
 
-wandb/
+datasets/
 
+wandb/
 lightning_logs/
+
+
+DEPRECATED/

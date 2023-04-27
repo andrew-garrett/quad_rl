@@ -23,11 +23,7 @@ class TestDynamics():
             u_in = self.data[12:, i] #control action taken 
             s_out = self.data[:12, i]
             #Call model to get prediction
-<<<<<<< HEAD
-            self.s_pred[:, i-1] = self.model(np.reshape(s_in, (1,12)), np.reshape(u_in, (1,4)))
-=======
             self.s_pred[:, i-1] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
->>>>>>> 13cd9b9f73dd8cfc712c98afe593c307e6abf5e5
 
             #Printing for debugging 
             if printout: 
@@ -104,8 +100,8 @@ class TestDynamics():
     
 
 
-#TEST ANALYTICAL DYNAMICS MODEL
-#Create config
+# TEST ANALYTICAL DYNAMICS MODEL
+# Create config
 config = get_mppi_config()
 
 #Create dyanmics model object

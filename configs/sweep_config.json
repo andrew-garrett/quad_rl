@@ -1,0 +1,19 @@
+{
+	"ALPHA": 0,
+	"COST_MODEL": "CostModel",
+	"DTYPE": "float64",
+	"DYNAMICS_MODEL": "AnalyticalModel",
+	"FREQUENCY": 48,
+	"K": 128,
+	"METHOD": "numpy",
+	"Q_p": 880,
+	"Q_r": 150,
+	"Q_v": 580,
+	"Q_w": 300,
+	"SYSTEM_BIAS": 2.0857103792432863,
+	"SYSTEM_NOISE": 140,
+	"TEMPERATURE": 0.0713600373179025,
+	"T_HORIZON": 1.5,
+	"U_SPACE": 4,
+	"X_SPACE": 12
+}
