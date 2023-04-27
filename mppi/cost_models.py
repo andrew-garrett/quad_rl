@@ -77,9 +77,9 @@ class CostModel:
         """
         if len(state.shape) <= 1:
             state = state.reshape(1, -1)
-        delta_x = self.state_des - state
+        delta_x = state - self.state_des
         state_cost = self.METHOD.einsum("ij,kj,ik->i", delta_x, self.Q, delta_x) # dx^T @ Q @ dx
-        state_cost += 1e10*self.METHOD.sum(state[:, 2] <= 0) # if len(state_cost.shape) == 1 else 1e6*(state[2] <= 0) # CRASH COST
+        state_cost += 1e10*self.METHOD.sum(state[:, 2] <= 0) # CRASH COST
         return state_cost
 
     def compute_control_cost(self, u):
@@ -95,16 +95,15 @@ class CostModel:
         COST = GAMMA * ((u_tm1 - NOMINAL_U) @ SYSTEM_NOISE @ dU))
         """
         u_tm1, du = u
-        # u_tm1 = (u_tm1 - self.config.CF2X.HOVER_RPM) / self.config.CF2X.MAX_RPM
         u_tm1 = u_tm1 / self.config.CF2X.MAX_RPM
         du = du / self.config.CF2X.MAX_RPM
-        # du = self.METHOD.abs(du) # This is optional??
+        # du = self.METHOD.abs(du) # This is optional?? favors noisier actions
         self.U_SHAPE_ARR = self.METHOD.broadcast_to(u_tm1, self.U_SHAPE_ARR.shape)
         control_cost = self.METHOD.einsum("ij,kj,ik->i", self.U_SHAPE_ARR, self.SYSTEM_NOISE_INV, du)
         return self.config.TEMPERATURE * control_cost
 
     def __call__(self, state, u):
-        return self.compute_state_cost(state) + self.compute_control_cost(u)
+        return self.compute_state_cost(state) # + self.compute_control_cost(u)
     
 
     

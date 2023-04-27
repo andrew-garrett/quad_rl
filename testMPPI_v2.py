@@ -1,10 +1,8 @@
-from collections import namedtuple
-import os
-import sys
-# sys.path.append("../quad_rl")
-from copy import deepcopy
+import argparse
+import os, sys
 import time
 from tqdm import tqdm
+from collections import namedtuple
 import wandb
 try:
     import cupy as cp
@@ -12,14 +10,11 @@ except:
     print("Cupy not found, defaulting back to np/torch.")
 import numpy as np
 import torch
-from matplotlib import cm
+from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 
 # from pytorch_mppi.mppi import MPPI # UM-ARM Lab's MPPI Implementation, used for reference
 
-import mppi.cost_models as cost_models
-import mppi.dynamics_models as dynamics_models
 import mppi.MPPI_Node as MPPI_Node
 
 class MPPITest_v2:
@@ -33,7 +28,6 @@ class MPPITest_v2:
         self.dynamics_simulator = mppi_node.F
         ##### Create MPPI Object
         self.mppi_node = mppi_node
-        
         self.reset()
 
     def reset(self):
@@ -69,12 +63,10 @@ class MPPITest_v2:
         tracked_trajectory_cost = self.mppi_node.S.compute_state_cost(state_tp1)[0] # Scalar
         self.data["tracked_trajectory"].append((state_tp1, tracked_trajectory_cost)) # We track this, but we should focus on the TERMINAL COST
 
-        
         ##### If we are out of the warmup phase, compute the cost of the current optimal control sequence (rollout-cost)
         if len(self.data["optimal_rollout"]) > 0:
             # Only collect the rollout-cost from the initial state
             return
-        
         self.data["optimal_rollout"].append((state_tp1, tracked_trajectory_cost)) # Append the next-state and it's cost (because controls are rolling now)
         for i, ts_i in enumerate(self.T_HORIZON[1:]):
             state_tp1 = self.dynamics_simulator(state=state_tp1.reshape(1, -1), u=smoothed_controls[i].reshape(1, -1)) # size(1, 12)
@@ -103,6 +95,7 @@ class MPPITest_v2:
             for i, t in enumerate(self.T_HORIZON):
                 state_t = self.data["tracked_trajectory"][-1][0]
                 self.step(state_t, shift_nominal_trajectory=True)
+                ##### TODO: Add functionality to accept a trajectory here
                 if traj is not None:
                     target_state = traj.update(t+self.mppi_config.T_HORIZON)
                     self.mppi_node.reset(target_state)
@@ -126,7 +119,7 @@ class MPPITest_v2:
         """
         Run through the same trajectory a few times.
         """
-        self.mppi_node.S.set_new_desired_state(target_state)
+        self.mppi_node.reset(target_state)
         combined_results = {}
         for i in range(num_trials):
             results = self.simulate(init_state, traj=traj)
@@ -138,30 +131,63 @@ class MPPITest_v2:
             self.reset()
         return combined_results
 
-    def plot_results(self, results_dict, target_state=None):
+    def plot_results(self, results_dict, target_state=None, wandb_run=None):
         """
         Plot the optimal rollout and the tracked trajectory over time
         """
         tracked_trajectories = results_dict["tracked_trajectory"]
         rollouts = results_dict["rollout"]
+        colors = ["r", "g", "b"]
         fig = plt.figure(figsize=(7, 5))
         ax = fig.add_subplot(projection="3d")
+
+        # Initial Orientation
+        drone_ax_i = Rotation.from_euler("xyz", tracked_trajectories[0][0][0, 3:6]).apply(0.1*np.eye(3))
+        for j in range(3):
+            d_ax = np.vstack([tracked_trajectories[0][0][0, :3], tracked_trajectories[0][0][0, :3] + drone_ax_i[j]]).T
+            ax.plot(*d_ax, c=colors[j], linewidth=2)
+
+        # Final Orientation
+        drone_ax_f = Rotation.from_euler("xyz", tracked_trajectories[0][0][-1, 3:6]).apply(0.1*np.eye(3))
+        for j in range(3):
+            d_ax = np.vstack([tracked_trajectories[0][0][-1, :3], tracked_trajectories[0][0][-1, :3] + drone_ax_f[j]]).T
+            ax.plot(*d_ax, c=colors[j], linewidth=2)
+        
+        # Tracked Trajectory
         ax.plot(*tracked_trajectories[0][0][:, :3].T, c="c", linewidth=2, label="Tracked Trajectory")
-        ax.plot(*rollouts[0][0][:, :3].T, c="b", label="Optimal Trajectory")
         for i in range(1, len(tracked_trajectories)):
             ax.plot(*tracked_trajectories[i][0][:, :3].T, c="c", linewidth=2)
+            # Final Orientation
+            drone_ax_f = Rotation.from_euler("xyz", tracked_trajectories[i][0][-1, 3:6]).apply(0.1*np.eye(3))
+            for j in range(3):
+                d_ax = np.vstack([tracked_trajectories[i][0][-1, :3], tracked_trajectories[i][0][-1, :3] + drone_ax_f[j]]).T
+                ax.plot(*d_ax, c=colors[j], linewidth=2)
+        
+        # Rollout Trajectories
+        ax.plot(*rollouts[0][0][:, :3].T, c="k", label="Optimal Trajectory")
         for i in range(1, len(rollouts)):
             ax.plot(*rollouts[i][0][:, :3].T, c="b")
+        
+        # Target State
         if target_state is not None:
-            ax.scatter(*target_state[:3], c="g", label="Desired Position")
+            ax.scatter(*target_state[:3], c="k", label="Desired Position")
+            # Target Orientation
+            drone_ax_f = Rotation.from_euler("xyz", target_state[3:6]).apply(0.1*np.eye(3))
+            for j in range(3):
+                d_ax = np.vstack([target_state[:3], target_state[:3] + drone_ax_f[j]]).T
+                ax.plot(*d_ax, c=colors[j], linewidth=2)
+
         ax.legend()
         ax.set_xlabel("x (m)")
         ax.set_ylabel("y (m)")
         ax.set_zlabel("z (m)")
-        ax.set_xlim(-1.5, 1.5)
-        ax.set_ylim(-1.5, 1.5)
-        ax.set_zlim(0, 1.5)
-        plt.show()
+        ax.set_xlim3d(-1.5, 1.5)
+        ax.set_ylim3d(-1.5, 1.5)
+        ax.set_zlim3d(0, 1.5)
+        if wandb_run is not None:
+            fig.savefig("./trajectory.png")
+            wandb.log({"Sample Trajectories": wandb.Image("./trajectory.png")})
+        return fig, ax
         
     def log_results(self, results_dict, wandb_run=None):
         """
@@ -208,8 +234,12 @@ class MPPITest_v2:
     
 
 
-def evaluate(num_trials=2, sweep_config_path=None):
+def evaluate(num_trials=1, sweep_config_path=None):
+    """
+    Evaluation of MPPI on a set of simple "trajectories"
 
+    Logs to a WandB Sweep if sweep_config_path is provided
+    """
     if sweep_config_path is None:
         # If not sweeping, just use current best parameters
         config_fpath = "./configs/mppi_config.json"
@@ -220,7 +250,7 @@ def evaluate(num_trials=2, sweep_config_path=None):
         logging_config = {
             "reinit": True,
             "project": "ESE650 Final Project",
-            "group": "Unit Trajectory Tuning (terminal state-cost only)"
+            "group": "Unit Trajectory Tuning"
         }
         wandb_run = wandb.init(**logging_config)
 
@@ -235,31 +265,38 @@ def evaluate(num_trials=2, sweep_config_path=None):
     INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, np.zeros(6)))
 
     ##### Target States
-    grid_positions = np.indices((3, 3, 3))
+    grid_positions = np.indices((3, 3, 3), dtype=np.float64)
     grid_positions = grid_positions.reshape(3, -1).T
+    grid_positions -= 1
     TARGET_STATES = np.zeros((grid_positions.shape[0], 12))
     TARGET_STATES[:, :3] = grid_positions
     TARGET_STATES = TARGET_STATES[TARGET_STATES[:, 2] == INIT_XYZS[2], :]
-    TARGET_STATES[:, 3:5] = (TARGET_STATES[:, :2] - INIT_XYZS[:2]) / mppi_config.T_HORIZON # Set the target velocities
+    # TARGET_STATES[:, 6:8] = (TARGET_STATES[:, :2] - INIT_XYZS[:2]) / mppi_config.T_HORIZON # Set the target velocities
+    TARGET_STATES[:, 6:8] = mppi_config.T_HORIZON # Set the target velocities
     
     logs = []
+    verbose_inds = np.random.randint(0, TARGET_STATES.shape[0], 3)
     with tqdm(total=TARGET_STATES.shape[0]) as tq:
         for i, TARGET_STATE in enumerate(TARGET_STATES):
             if not np.all(TARGET_STATE[:3] == INIT_STATE[:3]):
                 ##### For each target position, evaluate three different simple trajectories
-                init_state_static = INIT_STATE
-                init_state_vel = init_state_static
-                init_state_vel[3:5] = TARGET_STATE[3:5]
-                target_state_accel = TARGET_STATE
-                target_state_accel[3:5] *= 2.0
+                init_state_static = INIT_STATE.copy()
+                init_state_45 = INIT_STATE.copy()
+                init_state_45[5] = np.pi / 4.
+                target_state_accel = TARGET_STATE.copy()
+                target_state_accel[6:8] *= 2.
                 init_target_pairs = [
-                    (init_state_static, TARGET_STATE), # start at hover, end at velocity
-                    (init_state_vel, TARGET_STATE), # start at velocity, end at velocity
-                    (init_state_vel, target_state_accel) # start at velocity, end at 2*velocity
+                    (init_state_static, TARGET_STATE.copy()), # start at hover, end at velocity
+                    (init_state_45, TARGET_STATE.copy()), # start at hover and yaw=45deg, end at velocity and yaw=0
+                    (init_state_static, target_state_accel) # start at hover, end at 2*velocity
                 ]
                 for (init_state, target_state) in init_target_pairs:
                     combined_results = mppi_test_v2.run_trials(num_trials, init_state, target_state=target_state, traj=None)
-                    logs.append(mppi_test_v2.log_results(combined_results))
+                    if i in verbose_inds:
+                        logs.append(mppi_test_v2.log_results(combined_results, wandb_run=wandb_run))
+                        mppi_test_v2.plot_results(combined_results, target_state=target_state, wandb_run=wandb_run)
+                    else:
+                        logs.append(mppi_test_v2.log_results(combined_results))
             tq.update()
     
     ##### Log summary metrics
@@ -269,9 +306,9 @@ def evaluate(num_trials=2, sweep_config_path=None):
             if type(summary_metrics[k]) is not list:
                 summary_metrics[k] = [summary_metrics[k]]
             summary_metrics[k].append(v)
-    for k, v in summary_metrics.items():
+    for k, v in list(summary_metrics.items()):
         summary_metrics[k] = np.mean(v)
-    for k in logs[0].keys():
+        # for k in logs[0].keys():
         summary_metrics[f"dataset_{k}"] = summary_metrics.pop(k)
 
     if sweep_config_path is not None:
@@ -286,42 +323,65 @@ def evaluate(num_trials=2, sweep_config_path=None):
                 
 
 if __name__ == "__main__":
-    
-    num_trials = 2
-    sweep_config_path = None
-    evaluate(num_trials, sweep_config_path=sweep_config_path)
-    # mppi_config = MPPI_Node.get_mppi_config()
-    # ##### Initial State
-    # INIT_XYZS = np.array([0., 0., 1.,])
-    # INIT_RPYS = np.array([0., 0., 0.])
-    # INIT_VS = np.array([0., 0., 0.])
-    # INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, INIT_VS, np.zeros(3)))
+    parser = argparse.ArgumentParser(description="MPPI Testing Script, simple visualizer")
+    parser.add_argument(
+        "--sweep",
+        help="config path",
+        type=str
+    )
+    args = parser.parse_args()
+        
+    ##### Parameters
+    num_trials = 5
+    if args.sweep is not None:
+        mppi_config = MPPI_Node.get_mppi_config(args.sweep)
+    else:
+        mppi_config = MPPI_Node.get_mppi_config()
+    ##### Initial Pose
+    INIT_XYZS = np.array([0., 0., 1.,])
+    INIT_RPYS = np.array([0., 0., np.pi / 4.])
+    ##### Target Pose
+    TARGET_XYZS = np.array([1., 1., 1.,])
+    TARGET_RPYS = np.array([0., 0., 0.])
+    ##### Initial and Target Velocities
+    # INIT_VS = np.array([TARGET_XYZS[0]/mppi_config.T_HORIZON, TARGET_XYZS[1]/mppi_config.T_HORIZON, 0.])
+    INIT_VS = np.zeros(3)
+    TARGET_VS = np.array([TARGET_XYZS[0]/mppi_config.T_HORIZON, TARGET_XYZS[1]/mppi_config.T_HORIZON, 0.])
+    ##### Initial and Target States
+    INIT_STATE = np.hstack((INIT_XYZS, INIT_RPYS, INIT_VS, np.zeros(3)))
+    TARGET_STATE = np.hstack((TARGET_XYZS, TARGET_RPYS, TARGET_VS, np.zeros(3)))
 
-    # ##### Target State
-    # TARGET_XYZS = np.array([1., 1., 1.,])
-    # TARGET_RPYS = np.array([0., 0., 0.])
-    # TARGET_VS = np.array([TARGET_XYZS[0]/mppi_config.T_HORIZON, TARGET_XYZS[0]/mppi_config.T_HORIZON, 0.])
-    # TARGET_STATE = np.hstack((TARGET_XYZS, TARGET_RPYS, TARGET_VS, np.zeros(3)))
-
-
-    # mppi_node = MPPI_Node.MPPI(mppi_config, TARGET_STATE)
-    # mppi_test_v2 = MPPITest_v2(mppi_config, mppi_node)
+    ##### Create an MPPI Object and MPPITest Object
+    mppi_node = MPPI_Node.MPPI(mppi_config, TARGET_STATE)
+    mppi_test_v2 = MPPITest_v2(mppi_config, mppi_node)
     
-    # num_trials = 5
-    # combined_results = mppi_test_v2.run_trials(num_trials, INIT_STATE, target_state=TARGET_STATE, traj=None)
+    ##### To plot a single simulation's results:
+    # results = mppi_test_v2.simulate(INIT_STATE)
+    # log = mppi_test_v2.log_results(results)
+    # mppi_test_v2.plot_results(results, target_state=TARGET_STATE)
     
-    # wandb_run = None
-    # # wandb_run = wandb.init()
+    ##### To plot trials with the same simulation parameters:
+    combined_results = mppi_test_v2.run_trials(num_trials, INIT_STATE, target_state=TARGET_STATE, traj=None)
+    fig, ax = mppi_test_v2.plot_results(combined_results, target_state=TARGET_STATE)
+    plt.show()
+
+    ##### Uncomment here to log the results to weights and biases
+    # wandb_run = wandb.init()
     # mppi_test_v2.log_results(combined_results, wandb_run=wandb_run)
-    # # wandb.finish()
+    # wandb.finish()
 
-    # v simple traj test
-    # from ..traj_gen import MinSnapTrajectoryGenerator # bootstrap\datasets\dyn\DEBUG_001\waypoints\task_figure_eight_ax-y_radii-1.0_dh-0.0_res-0.5.csv
-    # dummy_config_dict = {
-    #     "speed": 2.0,
-    #     "rdp_threshold": 0.05
-    # }
-    # dummy_config = namedtuple("dummy_config", dummy_config_dict.keys())(dummy_config_dict)
-    # root, task_fname = "./bootstrap/atasets/dyn/DEBUG_001/", "task_figure_eight_ax-y_radii-1.0_dh-0.0_res-0.5.csv"
-    # traj = MinSnapTrajectoryGenerator(dummy_config, root=root, task_name=task_fname)
-    # combined_results = mppi_test_v2.run_trials(num_trials, INIT_STATE, traj=traj)
+
+
+
+
+
+# v simple traj test
+# from ..traj_gen import MinSnapTrajectoryGenerator
+# dummy_config_dict = {
+#     "speed": 2.0,
+#     "rdp_threshold": 0.05
+# }
+# dummy_config = namedtuple("dummy_config", dummy_config_dict.keys())(dummy_config_dict)
+# root, task_fname = "./bootstrap/atasets/dyn/DEBUG_001/", "task_figure_eight_ax-y_radii-1.0_dh-0.0_res-0.5.csv"
+# traj = MinSnapTrajectoryGenerator(dummy_config, root=root, task_name=task_fname)
+# combined_results = mppi_test_v2.run_trials(num_trials, INIT_STATE, traj=traj)
