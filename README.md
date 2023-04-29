@@ -95,7 +95,7 @@ and simulation speed parameters.
 
 # TODO:
 
-- Tune cost function to imrpove MPPI results 
+- Tune cost function to improve MPPI results 
 - Implement PID as a baseline for MPPI controller 
 - Create learned models for PyBullet physics with more complicated phenomena (drag, downwash, etc) 
 
