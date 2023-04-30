@@ -2,16 +2,21 @@
 #################################################
 
 
+try:
+    import cupy as cp
+except:
+    print("Cupy not found, defaulting back to np/torch.")
 import numpy as np
 import os
 import torch
 import json
+from copy import deepcopy
 
 from scipy.spatial.transform import Rotation
+import torch
 
-import pybullet as p
 
-from ..training.lightning import DynamicsLightningModule
+from training.lightning import DynamicsLightningModule
 
 #################### FUNCTIONAL DYNAMICS MODEL ####################
 ###################################################################
@@ -65,7 +70,7 @@ class DynamicsModel:
         """
         Compute linear and angular acceleration using dynamics network
         """
-        acc = np.zeros((self.config.K, 6), dtype=self.config.DTYPE)
+        acc = np.zeros((self.config.K, 6))
         return acc
 
     def postprocess(self, output):
@@ -104,8 +109,8 @@ class AnalyticalModel(DynamicsModel):
 
     def preprocess(self, state, u):
         """Go from control in terms or RPM to control u_1 (eq 10) and u_2 (eq 16)"""
-        F, M = self.motorModel(u) #get forces and moments from motor model
-        u1 = np.sum(F, axis=1) #eq 10
+        F, M = self.motorModel(u)     #get forces and moments from motor model
+        u1 = np.sum(F, axis=1)        #eq 10
 
         #X drone torques 
         torque_x = self.config.CF2X.L/np.sqrt(2) * (F[:, 0] + F[:, 1] - F[:, 2] - F[:, 3])  #line 821
@@ -121,22 +126,20 @@ class AnalyticalModel(DynamicsModel):
         Two coupled second order ODES 
         """
         state, u1, u2 = input_proc # Decompose input
-        k, _ = np.shape(state)
-        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:].T
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
         # Coordinate transformation from drone frame to world frame, can use orientation
         d_R_w = Rotation.from_euler(('xyz'), rpy)
 
         # ---- Position, F = m*a ----
         f_g = np.array([0, 0, self.config.CF2X.GRAVITY]) #force due to gravity 
-        f_thrust = d_R_w.apply(np.vstack((np.zeros_like(u1), np.zeros_like(u1), u1)).T) #force due to thrust, rotated into world frame
+        f_thrust = d_R_w.apply(np.vstack((np.zeros_like(u1), np.zeros_like(u1), u1)).T) # force due to thrust, rotated into world frame
 
         #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT) #TODO
         F_sum = f_thrust - f_g # net force [N]
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
-        omega_dot = self.config.CF2X.J_INV @ (u2.T - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0))
-        # -self.config.CF2X.J @ omega_dot + u2.T = hat(rpy_rates) @ (self.config.CF2X.J @ rpy_rates) = np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates), axis=0)
+        omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates.T).T)).T
         return state, accel, omega_dot.T
     
     def postprocess(self, output):
@@ -161,7 +164,9 @@ class AnalyticalModel(DynamicsModel):
         """Helper function to compare with ground truth accelerations calculated using dv/dt
             Input the states, output the models acceleration predictions"""
         _ , linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
-        return linear_accel, angular_accel
+        return np.hstack((linear_accel, angular_accel))
+
+
 
 class SampleLearnedModel(DynamicsModel):
     """
@@ -173,10 +178,10 @@ class SampleLearnedModel(DynamicsModel):
         self.parse_config()
 
         self.nn.eval()
-        self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"), map_location="cuda")
-        self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"), map_location="cuda")
-        self.state_min = torch.load(os.path.join(self.dataset_path, "train_state_min.pt"), map_location="cuda")
-        self.state_max = torch.load(os.path.join(self.dataset_path, "train_state_max.pt"), map_location="cuda")
+        self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"))
+        self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"))
+        self.state_min = torch.load(os.path.join(self.dataset_path, "train_state_min.pt"))
+        self.state_max = torch.load(os.path.join(self.dataset_path, "train_state_max.pt"))
     
     def parse_config(self):
         self.dataset_path = os.path.join(self.config.NN_DATASET_ROOT, self.config.NN_DATASET_NAME, "torch_dataset")
@@ -184,8 +189,8 @@ class SampleLearnedModel(DynamicsModel):
         self.training_config_path = self.config.NN_CONFIG_PATH
         with open(self.training_config_path, "r") as f:
             self.training_config = json.load(f)
-        self.nn = DynamicsLightningModule.load_from_checkpoint(self.nn_ckpt_path, config=self.training_config)
-        self.max_rpm = self.config.MAX_RPM
+        self.nn = DynamicsLightningModule.load_from_checkpoint(self.nn_ckpt_path, config=self.training_config, log_dir=None)
+        self.max_rpm = self.config.CF2X.MAX_RPM
     
     def normalize(self, val, minval, maxval):
         norm = (val - minval)/(maxval - minval)
@@ -202,6 +207,7 @@ class SampleLearnedModel(DynamicsModel):
         Preprocess state and control for network input
         (normalize inputs, preprocess angles w/ sin and cos etc)
         """
+        #if state.shape[0] == 1:
         xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
 
         ## DIVIDE U BY MAX RPM
@@ -219,7 +225,7 @@ class SampleLearnedModel(DynamicsModel):
         """
         state, nn_input = input
         with torch.no_grad():
-            nn_output = self.nn(nn_input)
+            nn_output = self.nn.model(nn_input.float(), None)
         return state, nn_output
 
     def postprocess(self, output):
@@ -238,6 +244,84 @@ class SampleLearnedModel(DynamicsModel):
         #same for rotation 
         rpy_rates_dt = rpy_rates + omega_dot * dt 
         rpy_dt = rpy + rpy_rates_dt * dt
+
+        # wrap rpy_dt
+        rpy_wrapped = deepcopy(rpy_dt)
+        rpy_wrapped[0,[0,2]] = (rpy_wrapped[0,[0,2]] + np.pi) % (2 * np.pi) - np.pi
+        rpy_wrapped[0,1] = (rpy_wrapped[0,1] + np.pi/2) % (np.pi) - np.pi/2
         
         #format in shape of state and return 
-        return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
+        return np.hstack((xyz_dt, velo_dt, rpy_wrapped, rpy_rates_dt))
+    
+    def accelerationLabels(self, state, u):
+        """Helper function to compare with ground truth accelerations calculated using dv/dt
+            Input the states, output the models acceleration predictions"""
+        _ , nn_output = self.step_dynamics(self.preprocess(state, u))
+        nn_output_denormalized = self.denormalize(nn_output, self.nn_gt_min, self.nn_gt_max).numpy()
+        linear_accel, angular_accel = (nn_output_denormalized[:,:3], nn_output_denormalized[:,3:])
+
+        return np.hstack((linear_accel, angular_accel))
+
+
+class TorchAnalyticalModel(AnalyticalModel):
+    """
+    Child Class of the AnalyticalModel Class, this is implemented in torch.
+    """
+    def __init__(self, config, explicit=True):
+        super().__init__(config, explicit)
+        self.J = torch.from_numpy(self.config.CF2X.J).to(device=self.config.DEVICE, dtype=self.config.DTYPE)
+        self.J_INV = torch.from_numpy(self.config.CF2X.J_INV).to(device=self.config.DEVICE, dtype=self.config.DTYPE)
+
+    def preprocess(self, state, u):
+        """Go from control in terms or RPM to control u_1 (eq 10) and u_2 (eq 16)"""
+        F, M = self.motorModel(u) # get forces and moments from motor model
+        u1 = torch.sum(F, dim=1) # eq 10
+
+        #X drone torques 
+        torque_x = self.config.CF2X.L/np.sqrt(2) * (F[:, 0] + F[:, 1] - F[:, 2] - F[:, 3])  # line 821
+        torque_y = self.config.CF2X.L/np.sqrt(2) * (-F[:, 0] + F[:, 1] + F[:, 2] - F[:, 3]) # line 822
+        torque_z = -1*M[:, 0] + M[:, 1] - M[:, 2] + M[:, 3]                                 # line 819
+        u2 = torch.vstack([torque_x, torque_y, torque_z]).T                                 # eq 16
+        return state, u1, u2 
+    
+    def step_dynamics(self, input_proc):
+        """
+        Given the current state and control input u, use dynamics to find the accelerations
+        Two coupled second order ODES 
+        """
+        state, u1, u2 = input_proc # Decompose input
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+        # Coordinate transformation from drone frame to world frame, can use orientation
+        d_R_w = Rotation.from_euler(('xyz'), rpy.cpu())
+
+        # ---- Position, F = m*a ----
+        f_g = torch.tensor([0, 0, self.config.CF2X.GRAVITY]).to(device=self.config.DEVICE, dtype=self.config.DTYPE) #force due to gravity 
+        u1 = u1.cpu()
+        f_thrust = d_R_w.apply(torch.vstack((torch.zeros_like(u1), torch.zeros_like(u1), u1)).T)  #force due to thrust, rotated into world frame
+
+        #NO EXTERNAL FORCES (DRAG, DOWNWASH, GROUND EFFECT ETV FOR NOT) #TODO
+        F_sum = torch.tensor(f_thrust).to(device=self.config.DEVICE, dtype=self.config.DTYPE) - f_g # net force [N]
+        accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2]
+        # ---- Orientation ------
+        #Solving equation 18 for pqr dot 
+        omega_dot = self.J_INV @ (u2 - torch.cross(rpy_rates, (self.J @ rpy_rates.T).T)).T
+        return state, accel, omega_dot.T
+    
+
+    def postprocess(self, output):
+        """Given the current state, control input, and time interval, propogate the state kinematics"""
+        #Decompose output and state
+        state, accel, omega_dot = output
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+        dt = self.config.DT
+        
+        #Apply kinematic equations (same way it is done in dynamics)
+        velo_dt = velo + accel * dt
+        xyz_dt = xyz + velo_dt * dt
+        
+        #same for rotation 
+        rpy_rates_dt = rpy_rates + omega_dot * dt
+        rpy_dt = rpy + rpy_rates_dt * dt
+        
+        #format in shape of state and return 
+        return torch.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))

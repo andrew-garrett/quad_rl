@@ -56,6 +56,36 @@ Then, after accordingly setting parameters in training_config.json, run training
 python train_dynamics_model.py
 ```
 
+
+# Bootstrap Dataset Collection
+
+If you have the above requirements installed, then you should be good to start collecting data.
+
+Datasets are highly parameterizable, perhaps a bit too much so right now.  To generate the default debug dataset:
+
+```
+python bootstrap/boot_strap.py
+```
+
+Additional arguments can be provided as:
+
+```
+usage: boot_strap.py [-h] [--task-battery]        
+
+Bootstrap Simulation Dataset Collection Script    
+
+optional arguments:
+  -h, --help       show this help message and exit
+  --task-battery   task_battery.TaskBattery 
+```
+The options for `task_battery.TaskBattery` are in the bootstrap/task_battery.py, where there are options for a DEBUG dataset,
+an AGGRO flight dataset, and a CONTROLLED flight dataset.  Further options for the simulation dataset are configured
+in the configs/tracking_config.json.  These options control parameters such as the physics model, whether to display to the GUI,
+and simulation speed parameters.
+
+
+
+
 # TODO:
 
  - [] Figure out tensorboard vs. wandb results tracking

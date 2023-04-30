@@ -1,5 +1,5 @@
 from mppi.MPPI_Node import get_mppi_config
-from mppi.dynamics_models import AnalyticalModel
+from mppi.dynamics_models import AnalyticalModel, SampleLearnedModel
 from matplotlib import pyplot as plt
 
 import numpy as np
@@ -7,14 +7,18 @@ import numpy as np
 class TestDynamics():
     """Class for testing performance of dynamics models"""
 
-    def __init__(self, model, test_states):
+    def __init__(self, model, model2, test_states, title):
         #Dynamics model object, to be tested
         self.model = model
+        self.model2 = model2
         #Data from a single drone
         self.data = test_states
         _ , self.n = np.shape(test_states)
 
-    def runModel(self, printout = False): 
+        self.title = title
+
+    def runModelStep(self, printout = False): 
+        """COMPARE STEP BY STEP PREDICTIONS"""
         #preallocate prediction
         self.s_pred = np.zeros((12, self.n-1))
         #Simulate model for each time step
@@ -23,7 +27,7 @@ class TestDynamics():
             u_in = self.data[12:, i] #control action taken 
             s_out = self.data[:12, i]
             #Call model to get prediction
-            self.s_pred[:, i-1] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+            self.s_pred[:, i-1] = self.model2(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
 
             #Printing for debugging 
             if printout: 
@@ -36,6 +40,85 @@ class TestDynamics():
                 print("Prediction")
                 print(self.s_pred[:, i-1])
                 print("---------")
+
+    def runModelRollout(self):
+        """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUDNING ERROR"""
+        self.rollout = np.zeros((12, self.n))
+
+        self.rollout[:, 0] = self.data[:12, 0]
+
+        #rollout trajectory
+        for i in range(1, self.n):
+            s_in = self.rollout[:, i-1] #previous predicted state
+            u_in = self.data[12:, i] #requested control
+            accel = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+            nn_accel = self.model2.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+            breakpoint()
+            self.rollout[:, i] = self.model2(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+
+    def compareTraj(self):
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(self.data[0, :], label = 'X Actual')
+        axs[0].plot(self.rollout[0, :], label = 'X Predicted')
+        axs[0].legend()
+
+        axs[1].plot(self.data[1, :], label = 'Y Actual')
+        axs[1].plot(self.rollout[1, :], label = 'Y Predicted')
+        axs[1].legend()
+
+        
+        axs[2].plot(self.data[2, :], label = 'Z Actual')
+        axs[2].plot(self.rollout[2, :], label = 'Z Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+        plt.savefig('xyz.png')
+
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(self.data[3, :], label = 'V_x Actual')
+        axs[0].plot(self.rollout[3, :], label = 'V_x Predicted')
+        axs[0].legend()
+
+        axs[1].plot(self.data[4, :], label = 'V_y Actual')
+        axs[1].plot(self.rollout[4, :], label = 'V_y Predicted')
+        axs[1].legend()
+
+        axs[2].plot(self.data[5, :], label = 'V_z Actual')
+        axs[2].plot(self.rollout[5, :], label = 'V_z Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+        plt.savefig('velocity.png')
+
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(self.data[6, :], label = 'Roll Actual')
+        axs[0].plot(self.rollout[6, :], label = 'Roll Predicted')
+        axs[0].legend()
+
+        axs[1].plot(self.data[7, :], label = 'Pitch Actual')
+        axs[1].plot(self.rollout[7, :], label = 'Pitch Predicted')
+        axs[1].legend()
+
+        axs[2].plot(self.data[8, :], label = 'Yaw Actual')
+        axs[2].plot(self.rollout[8, :], label = 'Yaw Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+        plt.savefig('rpy.png')
+
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(self.data[9, :], label = 'Roll Rate Actual')
+        axs[0].plot(self.rollout[9, :], label = 'Roll Rate Predicted')
+        axs[0].legend()
+
+        axs[1].plot(self.data[10, :], label = 'Pitch Rate Actual')
+        axs[1].plot(self.rollout[10, :], label = 'Pitch Rate Predicted')
+        axs[1].legend()
+
+        axs[2].plot(self.data[11, :], label = 'Yaw Rate Actual')
+        axs[2].plot(self.rollout[11, :], label = 'Yaw Rate Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+        plt.savefig('rpy_rates.png')
+        plt.show()
+
 
     """VARIOUS ERROR METRICS TO PLOT AND VISUALIZE ACCURACY"""
     def linear_absolute_error(self):
@@ -97,25 +180,34 @@ class TestDynamics():
         plt.show()
 
 
-    
-
-
 # TEST ANALYTICAL DYNAMICS MODEL
 # Create config
 config = get_mppi_config()
 
 #Create dyanmics model object
 testAnalytical = AnalyticalModel(config) 
-flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
-# flight_file = "test_data_dyn2.npy"
+testNN = SampleLearnedModel(config) 
+flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_22.12.05.npy"
+#flight_file = "test_data_dyn2.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
 #Run Tester Class
-AnalyticalTester = TestDynamics(testAnalytical, test_state)
-AnalyticalTester.runModel(printout=False)
-AnalyticalTester.linear_absolute_error()
-AnalyticalTester.rotational_absolute_error()
+#AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
+#AnalyticalTester.runModelStep(printout=False)
+# AnalyticalTester.linear_absolute_error()
+# AnalyticalTester.rotational_absolute_error()
+
+#AnalyticalTester.runModelRollout()
+#AnalyticalTester.compareTraj()
+
+NNTester = TestDynamics(testAnalytical, testNN, test_state, "NN Model")
+#NNTester.runModelStep(printout=False)
+#NNTester.linear_absolute_error()
+#NNTester.rotational_absolute_error()
+
+NNTester.runModelRollout()
+NNTester.compareTraj()
 
 """DOESNT WORK FOR PYB DATA YET (where explicit = False)"""
 # #Create dyanmics model object
