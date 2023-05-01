@@ -81,7 +81,6 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     config_dict["SYSTEM_BIAS"] = config_dict["SYSTEM_BIAS"] * np.ones(config_dict["U_SPACE"])
     config_dict["SYSTEM_NOISE"] = config_dict["SYSTEM_NOISE"] * np.eye(config_dict["U_SPACE"])
     config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
-    config_dict["DISCOUNT"] = 1.0 - config_dict["DT"]
 
     config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return config
@@ -271,9 +270,7 @@ class MPPI:
             self.SAMPLES_X[0, :] = state.clone()
 
         # iteratively sample T-length trajectories, K times in parallel
-        curr_discount = 1.0
         for t in range(1, self.config.T+1):
-            curr_discount *= self.config.DISCOUNT
             # Get the current control
             u_tm1 = self.U[t-1]
             # Perturb the current control
@@ -281,8 +278,11 @@ class MPPI:
             v_tm1 = u_tm1 + du_tm1
             # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
-            # Compute the cost of taking the perturbed optimal control (DISCOUNTED BY HOW FAR THROUGH THE TRAJECTORY WE ARE)
-            self.COST_MAP += curr_discount*self.S(self.SAMPLES_X[t], (u_tm1, du_tm1))
+            # Compute the cost of taking the perturbed optimal control
+            # self.COST_MAP = self.config.DT*self.S(self.SAMPLES_X[t], (u_tm1, du_tm1))
+
+        # Terminal Cost
+        self.COST_MAP += self.S(self.SAMPLES_X[-1], (self.U[-1], du[:, -1, :]))
 
         # Compute the importance sampling weights
         self.compute_weights()

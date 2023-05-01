@@ -167,13 +167,13 @@ def track(trajectory, verbose=False):
 
     if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Render Waypoints
         config = get_tracking_config(trajectory=trajectory)
-        render_markers(env, config, points=trajectory.points)
+        # render_markers(env, config, points=trajectory.points)
 
     #### Run the simulation ####################################
     action = {str(k): np.array([0,0,0,0]) for k in range(env.NUM_DRONES)}
     t_counter = 0
     t_start = time.time()
-    t_swap = 2.0
+    t_swap = 0.5
     t_horizon = 2.0
     while t_counter < int(config.T_HORIZON*env.SIM_FREQ):
         
@@ -182,11 +182,11 @@ def track(trajectory, verbose=False):
 
         #### Compute control at the desired frequency ######################################
         if t_counter%config.CONTROL_PERIOD_STEPS == 0:
-            # if t_swap > 0 and t_swap < t_counter*env.TIMESTEP:
-            #     ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
-            #     t_swap = 0
+            if t_swap >= 0 and t_counter*env.TIMESTEP >= t_swap:
+                ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
+                t_swap = -1
             # target_state = trajectory.update(t_counter*env.TIMESTEP)
-            target_state = trajectory.update(t_counter*env.TIMESTEP + 2.0*(t_swap == 0))
+            target_state = trajectory.update(t_counter*env.TIMESTEP + t_horizon*(t_swap == -1))
 
             target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(trajectory, env, ctrl, config, target_state, obs, action)
             if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI: #### Plot Trajectory and Flight

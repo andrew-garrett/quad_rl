@@ -44,7 +44,7 @@ class MPPIControl(BaseControl):
         # TODO: migrate code from MPPI_Node.py's MPPI class
         self.mppi_config = get_mppi_config()
         self.mppi_node = MPPI(self.mppi_config, None)
-        self.warmup_iters = 20
+        self.warmup_iters = self.mppi_config.T
         self.stats = {"runtime": [], "good_samples_pct": []}
 
         self.reset()
@@ -88,97 +88,22 @@ class MPPIControl(BaseControl):
             (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
 
         """
-        state_des = np.hstack((target_pos, target_rpy, target_vel, target_rpy_rates)).reshape(1, -1)
-        self.mppi_node.S.set_new_desired_state(state_des)
-        curr_state = np.hstack((state[:3], state[7:10], state[10:13], state[13:16])).reshape(1, -1)
-        rpm = self.mppi_node.command(curr_state, (self.control_counter > self.warmup_iters))
-        
+        # state_des = np.hstack((target_pos, target_rpy, target_vel, target_rpy_rates)).reshape(1, -1)
+        state_des = np.hstack((target_pos, target_rpy, target_vel, np.zeros(3))).reshape(1, -1)
+        self.mppi_node.reset(state_des)
+        # curr_state = np.hstack((state[:3], state[7:10], state[10:13], state[13:16])).reshape(1, -1)
+        curr_state = np.hstack((state[:3], state[7:10], state[10:13], np.zeros(3))).reshape(1, -1)
+
+        while self.control_counter < self.warmup_iters:
+            self.mppi_node.command(curr_state, False)
+            self.control_counter += 1
+        rpm = self.mppi_node.command(curr_state, True)
         pos_e = target_pos - state[:3]
         vel_e = target_vel - state[10:13]
 
         self.control_counter += 1
 
         return rpm, pos_e, None
-
-
-    def computeControl(self,
-                       control_timestep,
-                       cur_pos,
-                       cur_quat,
-                       cur_vel,
-                       cur_ang_vel,
-                       target_pos,
-                       target_rpy=np.zeros(3),
-                       target_vel=np.zeros(3),
-                       target_rpy_rates=np.zeros(3)
-                       ):
-        """Computes the PID control action (as RPMs) for a single drone.
-
-        This methods sequentially calls `_dslPIDPositionControl()` and `_dslPIDAttitudeControl()`.
-        Parameter `cur_ang_vel` is unused.
-
-        Parameters
-        ----------
-        control_timestep : float
-            The time step at which control is computed.
-        cur_pos : ndarray
-            (3,1)-shaped array of floats containing the current position.
-        cur_quat : ndarray
-            (4,1)-shaped array of floats containing the current orientation as a quaternion.
-        cur_vel : ndarray
-            (3,1)-shaped array of floats containing the current velocity.
-        cur_ang_vel : ndarray
-            (3,1)-shaped array of floats containing the current angular velocity.
-        target_pos : ndarray
-            (3,1)-shaped array of floats containing the desired position.
-        target_rpy : ndarray, optional
-            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
-        target_vel : ndarray, optional
-            (3,1)-shaped array of floats containing the desired velocity.
-        target_rpy_rates : ndarray, optional
-            (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
-
-        Returns
-        -------
-        ndarray
-            (4,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
-        ndarray
-            (3,1)-shaped array of floats containing the current XYZ position error.
-        float
-            The current yaw error.
-
-        """
-        # self.control_counter += 1
-        # cur_pos,
-        # cur_quat,
-        # cur_vel,
-        # cur_ang_vel,
-        # target_pos,
-        # target_rpy=np.zeros(3),
-        # target_vel=np.zeros(3),
-        # target_rpy_rates=np.zeros(3)
-
-        # cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat)).reshape(3, 3)
-        # pos_e = target_pos - cur_pos
-        # vel_e = target_vel - cur_vel
-
-
-        # thrust, computed_target_rpy, pos_e = self._dslPIDPositionControl(control_timestep,
-        #                                                                  cur_pos,
-        #                                                                  cur_quat,
-        #                                                                  cur_vel,
-        #                                                                  target_pos,
-        #                                                                  target_rpy,
-        #                                                                  target_vel
-        #                                                                  )
-        # rpm = self._dslPIDAttitudeControl(control_timestep,
-        #                                   thrust,
-        #                                   cur_quat,
-        #                                   computed_target_rpy,
-        #                                   target_rpy_rates
-        #                                   )
-        # cur_rpy = p.getEulerFromQuaternion(cur_quat)
-        # return rpm, pos_e, computed_target_rpy[2] - cur_rpy[2]
     
     ################################################################################
 
