@@ -157,7 +157,7 @@ class AnalyticalModel(DynamicsModel):
         """Helper function to compare with ground truth accelerations calculated using dv/dt
             Input the states, output the models acceleration predictions"""
         _ , linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
-        return linear_accel, angular_accel
+        return np.hstack((linear_accel, angular_accel))
 
 
 
