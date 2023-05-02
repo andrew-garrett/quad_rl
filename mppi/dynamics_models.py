@@ -6,6 +6,7 @@ try:
     import cupy as cp
 except:
     print("Cupy not found, defaulting back to np/torch.")
+from copy import deepcopy
 import numpy as np
 from scipy.spatial.transform import Rotation
 import torch
@@ -131,7 +132,7 @@ class AnalyticalModel(DynamicsModel):
         F_sum = f_thrust - f_g # net force [N]
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
-        #Solving equation 18 for pqr dot 
+        # Solving equation 18 for pqr dot
         omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates.T).T)).T
         return state, accel, omega_dot.T
     
@@ -147,11 +148,15 @@ class AnalyticalModel(DynamicsModel):
         xyz_dt = xyz + velo_dt * dt
         
         #same for rotation 
-        rpy_rates_dt = rpy_rates + omega_dot * dt 
+        rpy_rates_dt = rpy_rates + omega_dot * dt
         rpy_dt = rpy + rpy_rates_dt * dt
+
+        rpy_wrapped = deepcopy(rpy_dt)
+        rpy_wrapped[0,[0,2]] = (rpy_wrapped[0,[0,2]] + np.pi) % (2 * np.pi) - np.pi
+        rpy_wrapped[0,1] = (rpy_wrapped[0,1] + np.pi/2) % (np.pi) - np.pi/2
         
         #format in shape of state and return 
-        return np.hstack((xyz_dt, velo_dt, rpy_dt, rpy_rates_dt))
+        return np.hstack((xyz_dt, velo_dt, rpy_wrapped, rpy_rates_dt))
 
     def accelerationLabels(self, state, u):
         """Helper function to compare with ground truth accelerations calculated using dv/dt
