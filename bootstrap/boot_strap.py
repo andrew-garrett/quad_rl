@@ -21,9 +21,13 @@ import traj_track
 ##########################################################
 
 
-# Get the physics model from the tracking_config.json and augment the ROOT to account for different physics models
-with open("./configs/tracking_config.json", "r") as f:
-    ROOT = os.path.join("./bootstrap/datasets/", json.load(f)["PHYSICS"])
+# Get the physics model from ./configs/tracking/tracking_config.json and augment the ROOT to account for different physics models
+CONFIG_FPATHS = ["./configs/tracking/default_tracking_config.json"] # For barebones visualization --------------------------------------------------- Produces zip, zip matches expectation
+CONFIG_FPATHS.append("./configs/tracking/debug_tracking_config.json") # For debug visualization ----------------------------------------------------- Produces zip, zip matches expectation
+CONFIG_FPATHS.append("./configs/tracking/data_tracking_config.json") # For data-collection ---------------------------------------------------------- Produces zip, zip matches expectation
+CONFIG_FPATHS.append("./configs/tracking/video_data_tracking_config.json") # For data-collection with video (barebones visualization) --------------- Produces zip, need to check
+CONFIG_FPATHS.append("./configs/tracking/debug_video_data_tracking_config.json") # For data-collection with video (debug visualization) ------------- Produces zip, zip matches expectation
+
 
 VERBOSE = False
 
@@ -34,7 +38,8 @@ VERBOSE = False
 
 def collect_bootstrap_data(
         root,
-        task_battery
+        task_battery,
+        config_fpath="./configs/tracking/tracking_config.json"
     ):
     """
     Function to create an initial bootstrapped training dataset
@@ -61,7 +66,7 @@ def collect_bootstrap_data(
             if prev_task_group is not None:
                 # for each trajectory in the previous group of tasks, collect desired states
                 for traj in trajectories_by_task[prev_task_group]["generated_trajectories"]:
-                    traj_track.track(traj, verbose=VERBOSE)
+                    traj_track.track(traj, config_fpath=config_fpath, verbose=VERBOSE)
 
             # then, initialize the next group of tasks
             trajectories_by_task[task_group] = {
@@ -71,25 +76,58 @@ def collect_bootstrap_data(
         trajectories_by_task[task_group]["generated_trajectories"].append(traj_gen_obj)
     
     for traj in trajectories_by_task[task_group]["generated_trajectories"]:
-        traj_track.track(traj, verbose=VERBOSE)
+        traj_track.track(traj, config_fpath=config_fpath, verbose=VERBOSE)
 
-    cleanup(root, dataset_name)
+    cleanup(root, dataset_name, config_fpath=config_fpath)
 
     return
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="Bootstrap Simulation Dataset Collection Script")
+    parser = argparse.ArgumentParser(description="Bootstrap Simulation Dataset Collection Script",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     t_battery_choices = [TASK_BATTERY.name for _, TASK_BATTERY in enumerate(TaskBattery)]
     t_battery_choices.append("FULL")
-    parser.add_argument("--task-battery", default="DEBUG", type=str, help="task_battery.TaskBattery", metavar="", choices=t_battery_choices)
+    parser.add_argument("--task-battery", default="DEBUG", type=str, help="task_battery.TaskBattery", choices=t_battery_choices)
+    tracking_options = ["_".join(t_config_fpath.split("/")[-1].split("_")[:-2]) for t_config_fpath in CONFIG_FPATHS]
+    parser.add_argument("--tracking-config", default="default", type=str, help="controls what kind of visualization and whether or not we collect data", choices=tracking_options)
     ARGS = parser.parse_args()
+
+    ##### Get the main/base tracking_config.json and update relevant values from the argument 
+    base_config_fpath = "./configs/tracking/tracking_config.json"
+    with open(base_config_fpath, "r") as f:
+        base_config = json.load(f)
+        ROOT = os.path.join("./bootstrap/datasets/", base_config["PHYSICS"])
+    # Get the visualization/data collection config specified by the CLI argument 
+    config_fpath = f"./configs/tracking/{ARGS.tracking_config}_tracking_config.json"
+    # config_fpath = f"./configs/tracking/data_tracking_config.json"
+    if "debug" in config_fpath:
+        VERBOSE = True
+    with open(config_fpath, "r") as f:
+        config = json.load(f)
+        for k, v in config.items():
+            base_config[k] = v
+    # Save the updated config for later copying it into the appropriate dataset
+    with open(base_config_fpath, "w") as f:
+        json.dump(base_config, f, indent="\t", sort_keys=True)
+
+    ##### Choose the task battery to run simulations on
     if ARGS.task_battery != "FULL":
         for _, t_battery in enumerate(TaskBattery):
             if t_battery.name == ARGS.task_battery:
                 collect_bootstrap_data(ROOT, t_battery)
     else:
+        # If we are performing multithreaded dataset collection, revert to the most lightweight tracking config
+        config_fpath = "./configs/tracking/data_tracking_config.json"
+        with open(config_fpath, "r") as f:
+            config = json.load(f)
+            for k, v in config.items():
+                base_config[k] = v
+        # Save the updated config for later copying it into the appropriate dataset
+        with open(base_config_fpath, "w") as f:
+            json.dump(base_config, f, indent="\t", sort_keys=True)
+        
+        ##### Start Threads, each collecting a dataset
         threads = []
         for _, t_battery in enumerate(TaskBattery):
             x = threading.Thread(target=collect_bootstrap_data, args=(ROOT, t_battery))

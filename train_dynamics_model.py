@@ -26,7 +26,8 @@ def load_sweep_config(config, sweep_config_path):
     return config
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Dynamics Neural Network Training Script",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "--root",
         default="./bootstrap/datasets/",
