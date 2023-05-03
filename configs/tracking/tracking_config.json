@@ -1,0 +1,21 @@
+{
+	"AGGREGATE": true,
+	"COLAB": false,
+	"CONTROL_FREQ_HZ": 48,
+	"DRONE_MODEL": "cf2x",
+	"GUI": false,
+	"H": 10.0,
+	"OBSTACLES": false,
+	"OFFSET": 1.0,
+	"PHYSICS": "dyn",
+	"PLOT": false,
+	"RECORD": true,
+	"SIMULATION_FREQ_HZ": 240,
+	"TARGET_NOISE_MODEL": {
+		"sigma_p": 0.01,
+		"sigma_r": 0.01,
+		"sigma_v": 0.01
+	},
+	"USER_DEBUG_GUI": true,
+	"VISION": false
+}

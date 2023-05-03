@@ -167,8 +167,8 @@ class AnalyticalModel(DynamicsModel):
         rpy_dt = rpy + rpy_rates_dt * dt
 
         rpy_wrapped = deepcopy(rpy_dt)
-        rpy_wrapped[0,[0,2]] = (rpy_wrapped[0,[0,2]] + np.pi) % (2 * np.pi) - np.pi
-        rpy_wrapped[0,1] = (rpy_wrapped[0,1] + np.pi/2) % (np.pi) - np.pi/2
+        rpy_wrapped[:,[0,2]] = (rpy_wrapped[:,[0,2]] + np.pi) % (2 * np.pi) - np.pi
+        rpy_wrapped[:,1] = (rpy_wrapped[:,1] + np.pi/2) % (np.pi) - np.pi/2
         
         #format in shape of state and return 
         return np.hstack((xyz_dt, velo_dt, rpy_wrapped, rpy_rates_dt))
