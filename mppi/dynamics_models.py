@@ -133,12 +133,16 @@ class AnalyticalModel(DynamicsModel):
         accel = F_sum/self.config.CF2X.M #solve eq 17 for for accel [m/s^2
         # ---- Orientation ------
         # Solving equation 18 for pqr dot
+        if not self.is_explicit:
+            rpy_rates = d_R_w.inv().apply(rpy_rates)
+
         omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates.T).T)).T
         
         if not self.is_explicit:
             omega_dot = d_R_w.apply(omega_dot.T)
         else:
             omega_dot = omega_dot.T
+
 
         return state, accel, omega_dot
     
@@ -154,7 +158,12 @@ class AnalyticalModel(DynamicsModel):
         xyz_dt = xyz + velo_dt * dt
         
         #same for rotation 
+        #if self.is_explicit:
         rpy_rates_dt = rpy_rates + omega_dot * dt
+        # else:
+        #     d_R_w = Rotation.from_euler(('xyz'), rpy)
+        #     rpy_rates_dt = rpy_rates + (d_R_w.apply(omega_dot)) * dt
+
         rpy_dt = rpy + rpy_rates_dt * dt
 
         rpy_wrapped = deepcopy(rpy_dt)

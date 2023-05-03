@@ -1,4 +1,4 @@
-from mppi.MPPI_Node import get_mppi_config
+from mppi.MPPINode import get_mppi_config
 from mppi.dynamics_models import AnalyticalModel
 from matplotlib import pyplot as plt
 
@@ -13,7 +13,9 @@ class TestDynamics():
         #Data from a single drone
         self.data = test_states
         _ , self.n = np.shape(test_states)
-
+        self.dt = 1/48
+        self.lin_accels = (self.data[3:6, 1:] - self.data[3:6, :-1])/self.dt
+        self.ang_accels = (self.data[9:12, 1:] - self.data[9:12, :-1])/self.dt
         self.title = title
 
     def runModelStep(self, printout = False): 
@@ -42,17 +44,17 @@ class TestDynamics():
 
     def runModelRollout(self):
         """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUDNING ERROR"""
-        self.rollout = np.zeros((12, self.n))
+        self.rollout = np.zeros((12, self.n-1))
 
         self.rolled_accelerations = np.zeros((6, self.n-1))
 
-        self.rollout[:, 0] = self.data[:12, 0]
         #rollout trajectory
-        for i in range(1, self.n):
-            s_in = self.rollout[:, i-1] #previous predicted state
-            u_in = self.data[12:, i] #requested control
-            self.rollout[:, i] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
-            self.rolled_accelerations[:, i-1] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+        for i in range(self.n-1):
+            s_in = self.data[:12, i] #previous predicted state
+            u_in = self.data[12:, i+1] #requested control
+            self.rollout[:, i] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1))
+            self.rolled_accelerations[:, i] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1))
+            pass
 
 
     def compareTraj(self):
@@ -116,35 +118,34 @@ class TestDynamics():
     
     def compare_accels(self):
         """Method For Comparing Acceleration Rollouts"""
-        lin_accels = (self.data[3:6, 1:] - self.data[3:6, :-1])/(1/48)
-        ang_accels = (self.data[9:, 1:] - self.data[9:, :-1])/(1/48)
+
 
         fig, axs = plt.subplots(3, 1)
-        axs[0].plot(lin_accels[0, :], label = 'X Accel Actual')
+        axs[0].plot(self.lin_accels[0, :], label = 'X Accel Actual')
         axs[0].plot(self.rolled_accelerations[0, :], '--', label = 'X Accel Predicted')
         axs[0].legend()
 
-        axs[1].plot(lin_accels[1, :], label = 'Y Accel Actual')
+        axs[1].plot(self.lin_accels[1, :], label = 'Y Accel Actual')
         axs[1].plot(self.rolled_accelerations[1, :], '--', label = 'Y Accel Predicted')
         axs[1].legend()
 
         
-        axs[2].plot(lin_accels[2, :], label = 'Z Accel Actual')
+        axs[2].plot(self.lin_accels[2, :], label = 'Z Accel Actual')
         axs[2].plot(self.rolled_accelerations[2, :], '--', label = 'Z Accel Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
 
         fig, axs = plt.subplots(3, 1)
-        axs[0].plot(ang_accels[0, :], label = 'Roll Accel Actual')
+        axs[0].plot(self.ang_accels[0, :], label = 'Roll Accel Actual')
         axs[0].plot(self.rolled_accelerations[3, :], '--', label = 'Roll Accel Predicted')
         axs[0].legend()
 
-        axs[1].plot(ang_accels[1, :], label = ' Pitch Accel Actual')
+        axs[1].plot(self.ang_accels[1, :], label = ' Pitch Accel Actual')
         axs[1].plot(self.rolled_accelerations[4, :], '--', label = 'Pitch Accel Predicted')
         axs[1].legend()
 
         
-        axs[2].plot(ang_accels[2, :], label = 'Yaw Accel Actual')
+        axs[2].plot(self.ang_accels[2, :], label = 'Yaw Accel Actual')
         axs[2].plot(self.rolled_accelerations[5, :], '--', label = 'Yaw Accel Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
@@ -221,12 +222,23 @@ testAnalytical = AnalyticalModel(config)
 #flight_file = "test_data_dyn2.npy"
 
 #flight_file = "newAggroFile.npy"
-flight_file = "save-flight-04.19.2023_22.12.05.npy"
+#flight_file = "save-flight-04.19.2023_22.12.05.npy"
+flight_file = "PYBD2.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
 #Run Tester Class
-AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
+# AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
+# AnalyticalTester.runModelStep(printout=False)
+# # AnalyticalTester.linear_absolute_error()
+# # AnalyticalTester.rotational_absolute_error()
+
+# AnalyticalTester.runModelRollout()
+# AnalyticalTester.compareTraj()
+# AnalyticalTester.compare_accels()
+
+testAnalyticalPYB = AnalyticalModel(config, explicit=False) 
+AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state, "Analytical Model PYB")
 AnalyticalTester.runModelStep(printout=False)
 # AnalyticalTester.linear_absolute_error()
 # AnalyticalTester.rotational_absolute_error()
