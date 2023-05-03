@@ -11,8 +11,8 @@
     "SIMULATION_FREQ_HZ" : 240,
     "CONTROL_FREQ_HZ" : 48,
     "COLAB" : false,
-    "H" : 10.0,
-    "OFFSET" : 1.0,
+    "H" : 1.0,
+    "OFFSET" : 0.5,
     "TARGET_NOISE_MODEL" : {
         "sigma_p" : 0.01,
         "sigma_v" : 0.01,
