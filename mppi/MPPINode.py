@@ -68,10 +68,10 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
         Q = np.ones(config_dict["X_SPACE"])
         if "Q_p" in config_dict.keys():
             Q[:3] = np.array([config_dict["Q_p"] for i in range(3)])
-        if "Q_r" in config_dict.keys():
-            Q[3:6] = np.array([config_dict["Q_r"] for i in range(3)])
         if "Q_v" in config_dict.keys():
-            Q[6:9] = np.array([config_dict["Q_v"] for i in range(3)])
+            Q[3:6] = np.array([config_dict["Q_v"] for i in range(3)])
+        if "Q_r" in config_dict.keys():
+            Q[6:9] = np.array([config_dict["Q_r"] for i in range(3)])
         if "Q_w" in config_dict.keys():
             Q[9:12] = np.array([config_dict["Q_w"] for i in range(3)])
         config_dict["Q"] = Q
@@ -139,32 +139,6 @@ def parseURDFParameters(urdf_fpath="./configs/cf2x.urdf"):
     return config
 
 
-"""
-MPPI_CONFIG PARAMETERS AND DEFAULT VALUES:
-
-HOVER_RPM = 14468.429 # ============================================== RPM @ HOVER, NOMINAL CONTROL
-U_NOMINAL = [HOVER_RPM, HOVER_RPM, HOVER_RPM, HOVER_RPM] # =========== NOMINAL CONTROL (HOVERING)
-
-X_SPACE = 12 # ======================================================= STATE SPACE (x,y,z, r,p,y, v_x,v_y,v_z, w_x,w_y,w_z)
-U_SPACE = 4 # ======================================================== CONTROL SPACE
-U_SIGMA = 10. # ====================================================== CONTROL NOISE
-SYSTEM_NOISE = np.linalg.inv(U_SIGMA * np.eye(U_SPACE)) ============== CONTROL-COST COVARIANCE
-
-K = 512 # ============================================================ NUMBER OF TRAJECTORIES TO SAMPLE
-T_HORIZON = 2.5 # ==================================================== TIME HORIZON
-FREQUENCY = 48 # ===================================================== CONTROL FREQUENCY
-DT = 1.0 / FREQUENCY # =============================================== TIMESTEP SIZE
-T = int(T_HORIZON*FREQUENCY) # ======================================= NUMBER OF TIMESTEPS
-
-TEMPERATURE = 1. # =================================================== TEMPERATURE
-GAMMA = 0.5 # ========================================================= CONTROL COST PARAMETER
-ALPHA = 0.1 # ======================================================== NOMINAL CONTROL CENTERING PARAMETER
-Q = np.eye(X_SPACE) # ================================================ STATE-COST COVARIANCE
-
-DTYPE = np.float32 # ================================================= DATATYPE (np.float32 or np.float64)
-"""
-
-
 #################### MPPI ALGORITHM CLASS ####################
 ##############################################################
 
@@ -190,9 +164,9 @@ class MPPI:
         # Functional Cost Model
         try:
             s_config = self.config
-            self.S = getattr(cost_models, self.config.COST_MODEL)(s_config, state_des=state_des)
+            self.S = getattr(cost_models, self.config.COST_MODEL)(s_config)
         except:
-            self.S = cost_models.CostModel(s_config, state_des=state_des)
+            self.S = cost_models.CostModel(s_config)
 
         # Pre-allocate data structures
         self.COST_MAP = self.METHOD.zeros(self.config.K, dtype=self.config.DTYPE)
@@ -213,13 +187,14 @@ class MPPI:
             self.noise_dist = lambda size: self.noise_dist_obj.rsample(size)
         self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
 
-    def reset(self, desired_state=None):
+    def reset(self, desired_traj=None):
         """
         Resets the controller, unless an argument is given, where it only changes the set-point.
         """
-        if desired_state is not None:
-            self.S.set_new_desired_state(desired_state)
+        if desired_traj is not None:
+            self.traj_des = self.METHOD.asarray(desired_traj, dtype=self.config.DTYPE) # CP and NP and TORCH
             return
+
         self.SAMPLES_X = self.METHOD.zeros((self.config.T+1, self.config.K, self.config.X_SPACE), dtype=self.config.DTYPE)
         self.U = self.noise_dist(self.config.T) + self.U_NOMINAL
 
@@ -290,13 +265,12 @@ class MPPI:
             du_tm1 = du[:, t-1, :]
             v_tm1 = u_tm1 + du_tm1
             # Approximate the next state for the perturbed current control
-            nn_output = self.F(self.SAMPLES_X[t-1], v_tm1)
-            #analytical_output = self.analytical_model(self.SAMPLES_X[t-1], v_tm1)
-            
-            self.SAMPLES_X[t] = nn_output
-            # Compute the cost of taking the perturbed optimal control (DISCOUNTED BY HOW FAR THROUGH THE TRAJECTORY WE ARE)
-            self.COST_MAP += curr_discount*self.S(self.SAMPLES_X[t], (u_tm1, du_tm1))
-        #self.COST_MAP = self.S(self.SAMPLES_X[self.config.T], (u_tm1, du_tm1))
+            self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
+            # Compute the cost of taking the perturbed optimal control
+            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) * self.config.DT
+
+        # Terminal Cost
+        # self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :]))
 
         # Compute the importance sampling weights
         self.compute_weights()

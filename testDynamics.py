@@ -7,7 +7,7 @@ import numpy as np
 class TestDynamics():
     """Class for testing performance of dynamics models"""
 
-    def __init__(self, model, model2, test_states, title):
+    def __init__(self, model, test_states, title):
         #Dynamics model object, to be tested
         self.model = model
         self.model2 = model2
@@ -45,80 +45,112 @@ class TestDynamics():
         """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUDNING ERROR"""
         self.rollout = np.zeros((12, self.n))
 
-        self.rollout[:, 0] = self.data[:12, 0]
+        self.rolled_accelerations = np.zeros((6, self.n-1))
 
+        self.rollout[:, 0] = self.data[:12, 0]
         #rollout trajectory
         for i in range(1, self.n):
             s_in = self.rollout[:, i-1] #previous predicted state
             u_in = self.data[12:, i] #requested control
-            accel = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
-            nn_accel = self.model2.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
-            breakpoint()
-            self.rollout[:, i] = self.model2(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+            self.rollout[:, i] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+            self.rolled_accelerations[:, i-1] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
+
 
     def compareTraj(self):
         fig, axs = plt.subplots(3, 1)
         axs[0].plot(self.data[0, :], label = 'X Actual')
-        axs[0].plot(self.rollout[0, :], label = 'X Predicted')
+        axs[0].plot(self.rollout[0, :], '--', label = 'X Predicted')
         axs[0].legend()
 
         axs[1].plot(self.data[1, :], label = 'Y Actual')
-        axs[1].plot(self.rollout[1, :], label = 'Y Predicted')
+        axs[1].plot(self.rollout[1, :], '--', label = 'Y Predicted')
         axs[1].legend()
 
         
         axs[2].plot(self.data[2, :], label = 'Z Actual')
-        axs[2].plot(self.rollout[2, :], label = 'Z Predicted')
+        axs[2].plot(self.rollout[2, :], '--', label = 'Z Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
-        plt.savefig('xyz.png')
 
         fig, axs = plt.subplots(3, 1)
         axs[0].plot(self.data[3, :], label = 'V_x Actual')
-        axs[0].plot(self.rollout[3, :], label = 'V_x Predicted')
+        axs[0].plot(self.rollout[3, :], '--', label = 'V_x Predicted')
         axs[0].legend()
 
         axs[1].plot(self.data[4, :], label = 'V_y Actual')
-        axs[1].plot(self.rollout[4, :], label = 'V_y Predicted')
+        axs[1].plot(self.rollout[4, :], '--', label = 'V_y Predicted')
         axs[1].legend()
 
         axs[2].plot(self.data[5, :], label = 'V_z Actual')
-        axs[2].plot(self.rollout[5, :], label = 'V_z Predicted')
+        axs[2].plot(self.rollout[5, :], '--', label = 'V_z Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
-        plt.savefig('velocity.png')
 
         fig, axs = plt.subplots(3, 1)
         axs[0].plot(self.data[6, :], label = 'Roll Actual')
-        axs[0].plot(self.rollout[6, :], label = 'Roll Predicted')
+        axs[0].plot(self.rollout[6, :], '--', label = 'Roll Predicted')
         axs[0].legend()
 
         axs[1].plot(self.data[7, :], label = 'Pitch Actual')
-        axs[1].plot(self.rollout[7, :], label = 'Pitch Predicted')
+        axs[1].plot(self.rollout[7, :], '--', label = 'Pitch Predicted')
         axs[1].legend()
 
         axs[2].plot(self.data[8, :], label = 'Yaw Actual')
-        axs[2].plot(self.rollout[8, :], label = 'Yaw Predicted')
+        axs[2].plot(self.rollout[8, :], '--', label = 'Yaw Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
-        plt.savefig('rpy.png')
 
         fig, axs = plt.subplots(3, 1)
         axs[0].plot(self.data[9, :], label = 'Roll Rate Actual')
-        axs[0].plot(self.rollout[9, :], label = 'Roll Rate Predicted')
+        axs[0].plot(self.rollout[9, :], '--', label = 'Roll Rate Predicted')
         axs[0].legend()
 
         axs[1].plot(self.data[10, :], label = 'Pitch Rate Actual')
-        axs[1].plot(self.rollout[10, :], label = 'Pitch Rate Predicted')
+        axs[1].plot(self.rollout[10, :], '--', label = 'Pitch Rate Predicted')
         axs[1].legend()
 
         axs[2].plot(self.data[11, :], label = 'Yaw Rate Actual')
-        axs[2].plot(self.rollout[11, :], label = 'Yaw Rate Predicted')
+        axs[2].plot(self.rollout[11, :], '--', label = 'Yaw Rate Predicted')
         axs[2].legend()
         plt.suptitle(self.title)
-        plt.savefig('rpy_rates.png')
         plt.show()
+    
+    def compare_accels(self):
+        """Method For Comparing Acceleration Rollouts"""
+        lin_accels = (self.data[3:6, 1:] - self.data[3:6, :-1])/(1/48)
+        ang_accels = (self.data[9:, 1:] - self.data[9:, :-1])/(1/48)
 
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(lin_accels[0, :], label = 'X Accel Actual')
+        axs[0].plot(self.rolled_accelerations[0, :], '--', label = 'X Accel Predicted')
+        axs[0].legend()
+
+        axs[1].plot(lin_accels[1, :], label = 'Y Accel Actual')
+        axs[1].plot(self.rolled_accelerations[1, :], '--', label = 'Y Accel Predicted')
+        axs[1].legend()
+
+        
+        axs[2].plot(lin_accels[2, :], label = 'Z Accel Actual')
+        axs[2].plot(self.rolled_accelerations[2, :], '--', label = 'Z Accel Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+
+        fig, axs = plt.subplots(3, 1)
+        axs[0].plot(ang_accels[0, :], label = 'Roll Accel Actual')
+        axs[0].plot(self.rolled_accelerations[3, :], '--', label = 'Roll Accel Predicted')
+        axs[0].legend()
+
+        axs[1].plot(ang_accels[1, :], label = ' Pitch Accel Actual')
+        axs[1].plot(self.rolled_accelerations[4, :], '--', label = 'Pitch Accel Predicted')
+        axs[1].legend()
+
+        
+        axs[2].plot(ang_accels[2, :], label = 'Yaw Accel Actual')
+        axs[2].plot(self.rolled_accelerations[5, :], '--', label = 'Yaw Accel Predicted')
+        axs[2].legend()
+        plt.suptitle(self.title)
+
+        plt.show()
 
     """VARIOUS ERROR METRICS TO PLOT AND VISUALIZE ACCURACY"""
     def linear_absolute_error(self):
@@ -186,28 +218,23 @@ config = get_mppi_config()
 
 #Create dyanmics model object
 testAnalytical = AnalyticalModel(config) 
-testNN = SampleLearnedModel(config) 
-flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_22.12.05.npy"
+#flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
 #flight_file = "test_data_dyn2.npy"
+
+#flight_file = "newAggroFile.npy"
+flight_file = "save-flight-04.19.2023_22.12.05.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
 #Run Tester Class
-#AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
-#AnalyticalTester.runModelStep(printout=False)
+AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
+AnalyticalTester.runModelStep(printout=False)
 # AnalyticalTester.linear_absolute_error()
 # AnalyticalTester.rotational_absolute_error()
 
-#AnalyticalTester.runModelRollout()
-#AnalyticalTester.compareTraj()
-
-NNTester = TestDynamics(testAnalytical, testNN, test_state, "NN Model")
-#NNTester.runModelStep(printout=False)
-#NNTester.linear_absolute_error()
-#NNTester.rotational_absolute_error()
-
-NNTester.runModelRollout()
-NNTester.compareTraj()
+AnalyticalTester.runModelRollout()
+AnalyticalTester.compareTraj()
+AnalyticalTester.compare_accels()
 
 """DOESNT WORK FOR PYB DATA YET (where explicit = False)"""
 # #Create dyanmics model object

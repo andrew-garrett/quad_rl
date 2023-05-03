@@ -5,17 +5,16 @@ Basically, we need to migrate the functionality of MPPI_Node.py,
 while also restructuring to fit the necessary methods for the BaseControl class.
 """
 
-import math
+from copy import deepcopy
 import numpy as np
 import pybullet as p
-from scipy.spatial.transform import Rotation
 
-from gym_pybullet_drones.control.BaseControl import BaseControl
+from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 from gym_pybullet_drones.utils.enums import DroneModel
 
-from mppi.MPPI_Node import MPPI, get_mppi_config
+from mppi.MPPINode import get_mppi_config, MPPI
 
-class MPPIControl(BaseControl):
+class MPPIControl(DSLPIDControl):
     """
     MPPI control class for Crazyflies.
     """
@@ -37,15 +36,13 @@ class MPPIControl(BaseControl):
 
         """
         super().__init__(drone_model=drone_model, g=g)
-        if self.DRONE_MODEL != DroneModel.CF2X and self.DRONE_MODEL != DroneModel.CF2P:
-            print("[ERROR] in DSLPIDControl.__init__(), DSLPIDControl requires DroneModel.CF2X or DroneModel.CF2P")
-            exit()
 
-        # TODO: migrate code from MPPI_Node.py's MPPI class
+        # Create an MPPI Node
         self.mppi_config = get_mppi_config()
-        self.mppi_node = MPPI(self.mppi_config, None)
-        self.warmup_iters = 20
-        self.stats = {"runtime": [], "good_samples_pct": []}
+        self.mppi_node = MPPI(self.mppi_config)
+        self.warmup_iters = self.mppi_config.T
+        self.cur_state = None
+        self.reference_trajectory = None
 
         self.reset()
 
@@ -59,48 +56,6 @@ class MPPIControl(BaseControl):
 
     ################################################################################
 
-    def computeControlFromState(self,
-                                control_timestep,
-                                state,
-                                target_pos,
-                                target_rpy=np.zeros(3),
-                                target_vel=np.zeros(3),
-                                target_rpy_rates=np.zeros(3)
-                                ):
-        """Interface method using `computeControl`.
-
-        It can be used to compute a control action directly from the value of key "state"
-        in the `obs` returned by a call to BaseAviary.step().
-
-        Parameters
-        ----------
-        control_timestep : float
-            The time step at which control is computed.
-        state : ndarray
-            (20,)-shaped array of floats containing the current state of the drone.
-        target_pos : ndarray
-            (3,1)-shaped array of floats containing the desired position.
-        target_rpy : ndarray, optional
-            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
-        target_vel : ndarray, optional
-            (3,1)-shaped array of floats containing the desired velocity.
-        target_rpy_rates : ndarray, optional
-            (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
-
-        """
-        state_des = np.hstack((target_pos, target_rpy, target_vel, target_rpy_rates)).reshape(1, -1)
-        self.mppi_node.S.set_new_desired_state(state_des)
-        curr_state = np.hstack((state[:3], state[7:10], state[10:13], state[13:16])).reshape(1, -1)
-        rpm = self.mppi_node.command(curr_state, (self.control_counter > self.warmup_iters))
-        
-        pos_e = target_pos - state[:3]
-        vel_e = target_vel - state[10:13]
-
-        self.control_counter += 1
-
-        return rpm, pos_e, None
-
-
     def computeControl(self,
                        control_timestep,
                        cur_pos,
@@ -112,10 +67,8 @@ class MPPIControl(BaseControl):
                        target_vel=np.zeros(3),
                        target_rpy_rates=np.zeros(3)
                        ):
-        """Computes the PID control action (as RPMs) for a single drone.
+        """Computes the MPPI control action (as RPMs) for a single drone.
 
-        This methods sequentially calls `_dslPIDPositionControl()` and `_dslPIDAttitudeControl()`.
-        Parameter `cur_ang_vel` is unused.
 
         Parameters
         ----------
@@ -148,148 +101,103 @@ class MPPIControl(BaseControl):
             The current yaw error.
 
         """
-        # self.control_counter += 1
-        # cur_pos,
-        # cur_quat,
-        # cur_vel,
-        # cur_ang_vel,
-        # target_pos,
-        # target_rpy=np.zeros(3),
-        # target_vel=np.zeros(3),
-        # target_rpy_rates=np.zeros(3)
+        ##### Get the current state
+        cur_rpy = p.getEulerFromQuaternion(cur_quat)
+        cur_state = np.hstack((cur_pos, cur_vel, cur_rpy, cur_ang_vel)).reshape(1, -1)
+        self.cur_state = cur_state
 
-        # cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat)).reshape(3, 3)
-        # pos_e = target_pos - cur_pos
-        # vel_e = target_vel - cur_vel
+        ##### Warm up the MPPI Controller
+        while self.control_counter < self.warmup_iters:
+            self.mppi_node.command(cur_state, False)
+            self.control_counter += 1
+        if self.control_counter == self.warmup_iters:
+            self.warmup_iters = 0
+            self.control_counter = 0
 
-
-        # thrust, computed_target_rpy, pos_e = self._dslPIDPositionControl(control_timestep,
-        #                                                                  cur_pos,
-        #                                                                  cur_quat,
-        #                                                                  cur_vel,
-        #                                                                  target_pos,
-        #                                                                  target_rpy,
-        #                                                                  target_vel
-        #                                                                  )
-        # rpm = self._dslPIDAttitudeControl(control_timestep,
-        #                                   thrust,
-        #                                   cur_quat,
-        #                                   computed_target_rpy,
-        #                                   target_rpy_rates
-        #                                   )
-        # cur_rpy = p.getEulerFromQuaternion(cur_quat)
-        # return rpm, pos_e, computed_target_rpy[2] - cur_rpy[2]
-    
-    ################################################################################
-
-    def _dslPIDPositionControl(self,
-                               control_timestep,
-                               cur_pos,
-                               cur_quat,
-                               cur_vel,
-                               target_pos,
-                               target_rpy,
-                               target_vel
-                               ):
-        """DSL's CF2.x PID position control.
-
-        Parameters
-        ----------
-        control_timestep : float
-            The time step at which control is computed.
-        cur_pos : ndarray
-            (3,1)-shaped array of floats containing the current position.
-        cur_quat : ndarray
-            (4,1)-shaped array of floats containing the current orientation as a quaternion.
-        cur_vel : ndarray
-            (3,1)-shaped array of floats containing the current velocity.
-        target_pos : ndarray
-            (3,1)-shaped array of floats containing the desired position.
-        target_rpy : ndarray
-            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
-        target_vel : ndarray
-            (3,1)-shaped array of floats containing the desired velocity.
-
-        Returns
-        -------
-        float
-            The target thrust along the drone z-axis.
-        ndarray
-            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
-        float
-            The current position error.
-
-        """
-        cur_rotation = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        ##### Get next control input
+        rpm = self.mppi_node.command(cur_state, True)
+        self.control_counter += 1
         pos_e = target_pos - cur_pos
         vel_e = target_vel - cur_vel
-        self.integral_pos_e = self.integral_pos_e + pos_e*control_timestep
-        self.integral_pos_e = np.clip(self.integral_pos_e, -2., 2.)
-        self.integral_pos_e[2] = np.clip(self.integral_pos_e[2], -0.15, .15)
-        #### PID target thrust #####################################
-        target_thrust = np.multiply(self.P_COEFF_FOR, pos_e) \
-                        + np.multiply(self.I_COEFF_FOR, self.integral_pos_e) \
-                        + np.multiply(self.D_COEFF_FOR, vel_e) + np.array([0, 0, self.GRAVITY])
-        scalar_thrust = max(0., np.dot(target_thrust, cur_rotation[:,2]))
-        thrust = (math.sqrt(scalar_thrust / (4*self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
-        target_z_ax = target_thrust / np.linalg.norm(target_thrust)
-        target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
-        target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
-        target_x_ax = np.cross(target_y_ax, target_z_ax)
-        target_rotation = (np.vstack([target_x_ax, target_y_ax, target_z_ax])).transpose()
-        #### Target rotation #######################################
-        target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
-        if np.any(np.abs(target_euler) > math.pi):
-            print("\n[ERROR] ctrl it", self.control_counter, "in Control._dslPIDPositionControl(), values outside range [-pi,pi]")
-        return thrust, target_euler, pos_e
+        euler_e = target_rpy - cur_rpy
+        ang_vel_e = target_rpy_rates - cur_ang_vel
+
+        return rpm, pos_e, euler_e[-1]
     
     ################################################################################
 
-    def _dslPIDAttitudeControl(self,
-                               control_timestep,
-                               thrust,
-                               cur_quat,
-                               target_euler,
-                               target_rpy_rates
-                               ):
-        """DSL's CF2.x PID attitude control.
+    def set_reference_trajectory(self, t, trajectory, target_pos_i, target_vel_i, target_rpy_i, target_rpy_rates_i):
+        """
+        Sets the reference trajectory for MPPI to track.  If a reference trajectory has not yet been set,
+        this function will iterate through the global trajectory for a full time-horizon and create one.
+        After calling this function, self.reference_trajectory will be an np array of shape (self.mppi_config.T+1, self.mppi_config.X_SPACE)
+        which represents a fully rolled out global trajectory.  This function also sets the self.curr_state to the 
+        first state in the global trajectory if it has not yet been set, which only happens on the first rollout.
 
-        Parameters
+        Parameters:
         ----------
-        control_timestep : float
-            The time step at which control is computed.
-        thrust : float
-            The target thrust along the drone z-axis.
-        cur_quat : ndarray
-            (4,1)-shaped array of floats containing the current orientation as a quaternion.
-        target_euler : ndarray
-            (3,1)-shaped array of floats containing the computed target Euler angles.
-        target_rpy_rates : ndarray
-            (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
-
-        Returns
-        -------
-        ndarray
-            (4,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
+        t : float
+            The current timestep of the global trajectory
+        target_pos_i : ndarray
+            (3,1)-shaped array of floats containing the initial desired position.
+        target_rpy_i : ndarray
+            (3,1)-shaped array of floats containing the initial desired orientation as roll, pitch, yaw.
+        target_vel_i : ndarray
+            (3,1)-shaped array of floats containing the initial desired velocity.
+        target_rpy_rates_i : ndarray
+            (3,1)-shaped array of floats containing the initial desired roll, pitch, and yaw rates.
 
         """
-        cur_rotation = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
-        target_quat = (Rotation.from_euler('XYZ', target_euler, degrees=False)).as_quat()
-        w,x,y,z = target_quat
-        target_rotation = (Rotation.from_quat([w, x, y, z])).as_matrix()
-        rot_matrix_e = np.dot((target_rotation.transpose()),cur_rotation) - np.dot(cur_rotation.transpose(),target_rotation)
-        rot_e = np.array([rot_matrix_e[2, 1], rot_matrix_e[0, 2], rot_matrix_e[1, 0]]) 
-        rpy_rates_e = target_rpy_rates - (cur_rpy - self.last_rpy)/control_timestep
-        self.last_rpy = cur_rpy
-        self.integral_rpy_e = self.integral_rpy_e - rot_e*control_timestep
-        self.integral_rpy_e = np.clip(self.integral_rpy_e, -1500., 1500.)
-        self.integral_rpy_e[0:2] = np.clip(self.integral_rpy_e[0:2], -1., 1.)
-        #### PID target torques ####################################
-        target_torques = - np.multiply(self.P_COEFF_TOR, rot_e) \
-                         + np.multiply(self.D_COEFF_TOR, rpy_rates_e) \
-                         + np.multiply(self.I_COEFF_TOR, self.integral_rpy_e)
-        target_torques = np.clip(target_torques, -3200, 3200)
-        pwm = thrust + np.dot(self.MIXER_MATRIX, target_torques)
-        pwm = np.clip(pwm, self.MIN_PWM, self.MAX_PWM)
-        return self.PWM2RPM_SCALE * pwm + self.PWM2RPM_CONST
+        if self.reference_trajectory is None:
+            # Unroll the full trajectory for all timesteps in the time horizon
+            self.reference_trajectory = np.zeros((self.mppi_config.T+1, self.mppi_config.X_SPACE))
+            self.reference_trajectory[0] = np.hstack((target_pos_i, target_vel_i, target_rpy_i, target_rpy_rates_i))
+            for t_ind in range(1, self.mppi_config.T):
+                t_ref = t + t_ind*self.mppi_config.DT
+                state_t = trajectory.update(t_ref)
+                # xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:], all in world frame except rpy_rates
+                self.reference_trajectory[t_ind] = np.hstack((state_t["x"] + target_pos_i, state_t["x_dot"], target_rpy_i, target_rpy_rates_i))
+        
+        # We only need to do a full unroll once; after that, we can just roll it and add the state at the horizon
+        t_ref = t + self.mppi_config.T*self.mppi_config.DT
+        state_t = trajectory.update(t_ref)
+        self.reference_trajectory[-1] = np.hstack((state_t["x"] + target_pos_i, state_t["x_dot"], target_rpy_i, target_rpy_rates_i))
+        # TODO: This may be BUGGY
+        # self.mppi_node.reset(desired_traj=deepcopy(self.reference_trajectory[1:]))
+        self.reference_trajectory = np.roll(self.reference_trajectory, -1, 0)
+        if self.cur_state is None:
+            self.cur_state = self.reference_trajectory[-1]
+        self.mppi_node.reset(desired_traj=deepcopy(self.reference_trajectory[:-1]))
+
+    ################################################################################
+
+    def get_trajectories(self, reference=False, rollout=False):
+        """
+        Gets the current global reference trajectory, and the current optimal rollout
+
+        Parameters:
+        ----------
+        reference: bool
+            if true, get the reference trajectory
+        rollout: bool
+            if true, get the rollout trajectory
+
+        Returns:
+        ----------
+        (ref_traj, rollout_traj): tuple(np.array(T+1, X_SPACE), np.array(T+1, X_SPACE)
+            the reference and rollout trajectories
+
+        """
+        ref_traj = None
+        rollout_traj = None
+        if reference:
+            ref_traj = self.reference_trajectory[:-1]
+        if rollout:
+            rollout_traj = np.zeros((self.mppi_config.T+1, self.mppi_config.X_SPACE))
+            rollout_traj[0] = self.cur_state
+            for t_ind in range(1, self.mppi_config.T+1):
+                x_tm1 = rollout_traj[t_ind-1].reshape(1, -1)
+                u_tm1 = self.mppi_node.U[t_ind-1].reshape(1, -1)
+                rollout_traj[t_ind] = self.mppi_node.F(x_tm1, u_tm1).flatten()
+            rollout_traj = np.roll(rollout_traj, -1, 0)[:-1]
+        return (ref_traj, rollout_traj)
