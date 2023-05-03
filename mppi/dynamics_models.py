@@ -133,7 +133,13 @@ class AnalyticalModel(DynamicsModel):
         # ---- Orientation ------
         #Solving equation 18 for pqr dot 
         omega_dot = self.config.CF2X.J_INV @ (u2 - np.cross(rpy_rates, (self.config.CF2X.J @ rpy_rates.T).T)).T
-        return state, accel, omega_dot.T
+        
+        if not self.is_explicit:
+            omega_dot = d_R_w.apply(omega_dot.T)
+        else:
+            omega_dot = omega_dot.T
+
+        return state, accel, omega_dot
     
     def postprocess(self, output):
         """Given the current state, control input, and time interval, propogate the state kinematics"""
@@ -158,6 +164,7 @@ class AnalyticalModel(DynamicsModel):
             Input the states, output the models acceleration predictions"""
         _ , linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
         return np.hstack((linear_accel, angular_accel))
+
 
 
 
