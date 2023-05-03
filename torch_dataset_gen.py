@@ -269,7 +269,8 @@ def create_torch_dataset(
 
 if __name__ == "__main__":
     ##### Define and parse (optional) arguments for the script
-    parser = argparse.ArgumentParser(description='Pytorch dataset file generation script')
+    parser = argparse.ArgumentParser(description='Pytorch dataset file generation script',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--dataset_path', default=DEFAULT_DATA_PATH, type=str, help='Root path of dataset', metavar='')
     parser.add_argument('--seed',         default=DEFAULT_SEED, type=int, help='Seed for dataset splitting', metavar='')
     parser.add_argument('--val_split',    default=DEFAULT_VAL_SPLIT, type=float, help='Fraction of dataset used for validation')

@@ -3,6 +3,7 @@
 
 
 import os
+import subprocess
 import shutil
 from zipfile import ZipFile
 import json
@@ -25,21 +26,45 @@ from bootstrap.task_battery import TRAJECTORY_PARAMS, DEFAULT_TASK_NAME, DEFAULT
 ###################################################################
 
 
-def cleanup(root, dataset_name):
+def cleanup(root, dataset_name, config_fpath="./configs/tracking/tracking_config.json"):
     """
     Zip a dataset and delete the uncompressed folder
+    Also has functionality to save mp4's of flight trials from 
     """
     data_root = os.path.join(root, dataset_name)
+    video_output_folder = os.path.join(data_root, 'videos')
     ##### Copy the tracking config to the dataset root
-    shutil.copy("./configs/tracking_config.json", data_root)
+    shutil.copy(config_fpath, data_root)
     os.rename(os.path.join(data_root, "tracking_config.json"), os.path.join(data_root, f"{dataset_name}_TRACKING_CONFIG.json"))
+    with open(os.path.join(data_root, f"{dataset_name}_TRACKING_CONFIG.json"), "r") as f:
+        video_fps = json.load(f)["CONTROL_FREQ_HZ"]
     ##### Walk the dataset directory and zip it's contents
     with ZipFile(f"{data_root}.zip", "w") as zip_object:
         for folder, sub_folders, f_names in os.walk(data_root):
+            png_fnames = []
+            zipped_fnames =  []
             for f_name in f_names:
                 f_path = os.path.join(folder, f_name)
-                zip_object.write(f_path, f_path[len(data_root):])
-    
+                # Only make one video per folder of images
+                if ".png" in f_name and f_path not in png_fnames and "frame" in f_name:
+                    ##### If we have pngs saved, create videos with ffmpeg
+                    if not os.path.exists(video_output_folder): 
+                        os.makedirs(video_output_folder, exist_ok=True)
+                    command = f"ffmpeg -y -framerate {video_fps} -s 1920x1080 -i {os.path.join(folder, 'frame_%d.png')} -c:v libx264 -pix_fmt yuv420p {os.path.join(video_output_folder, str(os.path.basename(folder)).replace('.', '-') + '.mp4')} -report".split(" ")
+                    if subprocess.run(command).returncode == 0:
+                        print ("FFmpeg Script Ran Successfully")
+                    else:
+                        print ("There was an error running your FFmpeg script")
+                        exit()
+                    ##### Dont save the pngs
+                    png_fnames = [os.path.join(folder, fn) for fn in f_names if ".png" in fn]
+                if f_path not in png_fnames and f_path not in zipped_fnames:
+                    zip_object.write(f_path, f_path[len(data_root):])
+                    zipped_fnames.append(f_path)
+        if os.path.exists(video_output_folder):
+            for video_fname in os.listdir(video_output_folder):
+                video_fpath = os.path.join(video_output_folder, video_fname)
+                zip_object.write(video_fpath, video_fpath[len(data_root):])
     if os.path.exists(f"{data_root}.zip"):
         ##### Delete the uncompressed dataset folder
         shutil.rmtree(data_root)
@@ -107,7 +132,7 @@ def get_traj_params(
     return params_prepped
 
 
-def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config.json"):
+def get_tracking_config(trajectory=None, config_fpath="./configs/tracking/tracking_config.json"):
     """
     Creates a config object for tracking parameters
 
@@ -134,9 +159,9 @@ def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config
     else:
         # Trajectory parameters overwrites tracking parameters
         # config_dict["CONTROL_PERIOD_STEPS"] = int(np.floor(config_dict["SIMULATION_FREQ_HZ"]/config_dict["CONTROL_FREQ_HZ"])) # TODO: @Andrew 
-        config_dict["OUTPUT_FOLDER"] = os.path.join(trajectory.root, "sim_data")
+        config_dict["OUTPUT_FOLDER"] =  os.path.join(trajectory.root, "sim_data")
         config_dict["T_FINISH"] = 1.1*trajectory.t_finish # TODO: @Andrew
-    if config_dict["GUI"]:
+    if config_dict["GUI"] or config_dict["USER_DEBUG_GUI"]:
         try:
             config_dict["VIZ"] = get_viz(config_dict)
         except:

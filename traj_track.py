@@ -10,7 +10,7 @@ import pybullet as p
 from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
 from gym_pybullet_drones.envs.VisionAviary import VisionAviary
 from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
-from gym_pybullet_drones.utils.Logger import Logger
+from CustomLogger import CustomLogger
 from gym_pybullet_drones.utils.utils import sync
 
 from bootstrap.utils import get_tracking_config, render_markers, render_rollouts
@@ -26,7 +26,6 @@ from mppi.MPPIControl import MPPIControl
 # config.VISION
 # config.GUI
 # config.RECORD
-# config.PLOT
 # config.USER_DEBUG_GUI
 # config.AGGREGATE
 # config.AGGREGATE_PHY_STEPS
@@ -41,7 +40,6 @@ from mppi.MPPIControl import MPPIControl
 # DEFAULT_VISION = False
 # DEFAULT_GUI = True
 # DEFAULT_RECORD_VISION = False
-# DEFAULT_PLOT = True
 # DEFAULT_USER_DEBUG_GUI = True
 # DEFAULT_AGGREGATE = True
 # DEFAULT_OBSTACLES = False
@@ -72,9 +70,9 @@ def initialize_tracking(trajectory, config):
         else:
             INIT_RPYS = np.array([[0., 0., trajectory.config.rpy0*np.pi/180.] for k in range(num_drones)])
     else:
-        INIT_RPYS = np.array([[0., 0., 2.*np.pi*(k / num_drones) - np.pi + np.pi / 4.] for k in range(num_drones)])
+        INIT_RPYS = np.array([[0., 0., 2.*np.pi*(k / num_drones) - np.pi + np.pi/4.] for k in range(num_drones)])
 
-    #### Create the environment with or without video capture ##
+    ##### Create the environment with or without video capture
     if config.VISION: 
         env = VisionAviary(drone_model=config.DRONE_MODEL,
                            num_drones=num_drones,
@@ -87,7 +85,8 @@ def initialize_tracking(trajectory, config):
                            gui=config.GUI,
                            record=config.RECORD,
                            obstacles=config.OBSTACLES,
-                           user_debug_gui=config.USER_DEBUG_GUI
+                           user_debug_gui=config.USER_DEBUG_GUI,
+                           output_folder=config.OUTPUT_FOLDER
                            )
     else: 
         env = CtrlAviary(drone_model=config.DRONE_MODEL,
@@ -101,14 +100,15 @@ def initialize_tracking(trajectory, config):
                          gui=config.GUI,
                          record=config.RECORD,
                          obstacles=config.OBSTACLES,
-                         user_debug_gui=config.USER_DEBUG_GUI
+                         user_debug_gui=config.USER_DEBUG_GUI,
+                         output_folder=config.OUTPUT_FOLDER
                         )
         
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
 
     #### Initialize the logger #################################
-    logger = Logger(
+    logger = CustomLogger(
         logging_freq_hz=int(config.SIMULATION_FREQ_HZ/config.AGGREGATE_PHY_STEPS),
         num_drones=env.NUM_DRONES,
         output_folder=config.OUTPUT_FOLDER,
@@ -119,7 +119,7 @@ def initialize_tracking(trajectory, config):
     ctrl = [DSLPIDControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
     # ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
 
-    return env, logger, ctrl
+    return env, logger, ctrl, PYB_CLIENT
 
 
 def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
@@ -129,21 +129,23 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
     # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
     target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"]
-    target_rpy = env.INIT_RPYS # TODO: @Andrew, generate target roll and pitch from acceleration?
-    target_rpy_rates = np.zeros_like(env.INIT_XYZS) # TODO: @Andrew, generate target roll and pitch rates from jerk?
+    target_rpy = env.INIT_RPYS + Rotation.from_euler("xyz", [0., 0., target_state["yaw"]]).as_euler("xyz")
+    target_rpy_rates = np.zeros_like(env.INIT_XYZS) + np.array([0., 0., target_state["yaw_dot"]])
 
     # If using MPPI control, collect the next_time_horizon of state trajectories
     if "MPPIControl" in str(ctrl[0]):
         ref_traj_arr, rollout_traj_arr = [], []
         for k in range(env.NUM_DRONES):
             ctrl[k].set_reference_trajectory(t, trajectory, env.INIT_XYZS[k], target_vel[k], target_rpy[k], target_rpy_rates[k])
-            ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
-            if ref_traj_k is not None:
-                ref_traj_arr.append(ref_traj_k)
-            if rollout_traj_k is not None:
-                rollout_traj_arr.append(rollout_traj_k)
-        if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI and config.USER_DEBUG_GUI:
-            config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
+        # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
+        #     if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+        #         ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
+        #         if ref_traj_k is not None:
+        #             ref_traj_arr.append(ref_traj_k)
+        #         if rollout_traj_k is not None:
+        #             rollout_traj_arr.append(rollout_traj_k)
+        # if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+        #     config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
 
     # # Apply noise to the targets
     # pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
@@ -170,17 +172,17 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
 ################################################
 
 
-def track(trajectory, verbose=False):
+def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", verbose=False):
 
     #### Initialize the simulation #############################
-    config = get_tracking_config(trajectory=trajectory)
+    config = get_tracking_config(trajectory=trajectory, config_fpath=config_fpath)
+    
     # Only log data when we are not visualizing trajectories
-    log_data = not config.USER_DEBUG_GUI
+    log_data = not config.GUI
+    env, logger, ctrl, pyb_client = initialize_tracking(trajectory, config)
 
-    env, logger, ctrl = initialize_tracking(trajectory, config)
-
-    if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI and config.USER_DEBUG_GUI: #### Render Waypoints
-        config = get_tracking_config(trajectory=trajectory)
+    if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI: #### Render Waypoints
+        config = get_tracking_config(trajectory=trajectory, config_fpath=config_fpath)
         render_markers(env, config, points=trajectory.points)
 
     #### Run the simulation ####################################
@@ -210,7 +212,7 @@ def track(trajectory, verbose=False):
             target_state = trajectory.update(t_counter*env.TIMESTEP)
 
             config, target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(t_counter*env.TIMESTEP, trajectory, env, ctrl, config, target_state, obs, action)
-            if np.cbrt(env.NUM_DRONES) <= 2 and config.GUI and config.USER_DEBUG_GUI: #### Plot Trajectory and Flight
+            if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI: #### Plot Trajectory and Flight
                 render_markers(env, config, obs=obs, target_pos=target_pos)
             #### First check if we have finished our trajectory #############################
             #### namely, current position <= 0.05m and current speed <= 0.05m/s #############
@@ -222,6 +224,15 @@ def track(trajectory, verbose=False):
                 break
         
         if log_data:
+            if config.RECORD:
+                env.CAM_VIEW = p.computeViewMatrixFromYawPitchRoll(distance=2,
+                                                                   yaw=45,
+                                                                   pitch=-30,
+                                                                   roll=0,
+                                                                   cameraTargetPosition=obs[str(0)]["state"][:3],
+                                                                   upAxisIndex=2,
+                                                                   physicsClientId=pyb_client
+                                                                  )
             for k in range(env.NUM_DRONES): #### Log the simulation
                 logger.log(
                     drone=k,
@@ -240,8 +251,8 @@ def track(trajectory, verbose=False):
                         )
 
         if config.GUI: #### Sync the simulation
-            sync(t_counter, t_start, env.TIMESTEP)
+            sync(t_counter, t_start, config.CONTROL_PERIOD_STEPS*env.TIMESTEP)
 
         t_counter += config.AGGREGATE_PHY_STEPS # Propragate physics
-    env.close() ##### Close the environments
-    logger.save() ##### Save the simulation results
+    env.close()   ##### Close the environments
+    logger.save() ##### Save the simulation results (npy and png plots)
