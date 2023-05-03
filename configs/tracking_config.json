@@ -5,7 +5,7 @@
     "GUI" : true,
     "RECORD" : false,
     "PLOT" : false,
-    "USER_DEBUG_GUI" : false,
+    "USER_DEBUG_GUI" : true,
     "AGGREGATE" : true,
     "OBSTACLES" : false,
     "SIMULATION_FREQ_HZ" : 240,

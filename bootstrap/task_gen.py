@@ -302,7 +302,7 @@ class Tasks:
         dataset_name = f"{task_battery.name}_000"
         dataset_fpath = os.path.join(root, dataset_name)
         if os.path.exists(dataset_fpath) or os.path.exists(f"{dataset_fpath}.zip"):
-            new_dataset_ind = max([int(d.replace(".zip", "")[-3]) for d in os.listdir(root) if task_battery.name in d]) + 1
+            new_dataset_ind = max([int(d.replace(".zip", "")[-3:]) for d in os.listdir(root) if task_battery.name in d]) + 1
             dataset_name = f"{dataset_name[:-3]}{str(new_dataset_ind).zfill(3)}"
             dataset_fpath = os.path.join(root, dataset_name)
         os.makedirs(os.path.join(dataset_fpath, "waypoints"))

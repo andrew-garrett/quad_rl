@@ -135,10 +135,10 @@ def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config
         # Trajectory parameters overwrites tracking parameters
         # config_dict["CONTROL_PERIOD_STEPS"] = int(np.floor(config_dict["SIMULATION_FREQ_HZ"]/config_dict["CONTROL_FREQ_HZ"])) # TODO: @Andrew 
         config_dict["OUTPUT_FOLDER"] = os.path.join(trajectory.root, "sim_data")
-        config_dict["T_HORIZON"] = 1.1*trajectory.T_horizon # TODO: @Andrew
+        config_dict["T_FINISH"] = 1.1*trajectory.t_finish # TODO: @Andrew
     if config_dict["GUI"]:
         try:
-            config_dict["VIZ"] = get_viz()
+            config_dict["VIZ"] = get_viz(config_dict)
         except:
             pass
     
@@ -150,7 +150,7 @@ def get_tracking_config(trajectory=None, config_fpath="./configs/tracking_config
 ########################################################################
 
 
-def get_viz():
+def get_viz(config_dict):
     """
     Creates a config object for visualization parameters
     """
@@ -208,6 +208,48 @@ def render_markers(env, config, points=None, obs=None, target_pos=None):
                 basePosition=obs[str(k)]["state"][:3],
                 useMaximalCoordinates=1
             )
+
+def render_rollouts(config, ref_traj_arr, rollout_traj_arr):
+    """
+    Render the reference trajectory and the mppi rollout trajectory
+    """
+    viz_config_dict = config.VIZ._asdict()
+    if "refTrajLineIds" not in viz_config_dict.keys() or "rolloutTrajLineIds" not in viz_config_dict.keys():
+        viz_config_dict["refTrajLineIds"] = []
+        viz_config_dict["rolloutTrajLineIds"] = []
+        for ref_traj in ref_traj_arr:
+            ref_speeds = np.linalg.norm(ref_traj[:, 3:6], axis=1)
+            ref_speeds_normed = (ref_speeds - np.min(ref_speeds)) / (np.max(ref_speeds) - np.min(ref_speeds))
+            if np.any(np.isnan(ref_speeds_normed)):
+                ref_speeds_normed = ref_speeds / np.max(ref_speeds)
+            viz_config_dict["refTrajLineIds"].extend([p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds_normed[t]], lineWidth=5) for t in range(ref_traj.shape[0]-1)])
+        for rollout_traj in rollout_traj_arr:
+            rollout_speeds = np.linalg.norm(rollout_traj[:, 3:6], axis=1)
+            rollout_speeds_normed = (rollout_speeds - np.min(rollout_speeds)) / (np.max(rollout_speeds) - np.min(rollout_speeds))
+            if np.any(np.isnan(rollout_speeds_normed)):
+                rollout_speeds_normed = rollout_speeds / np.max(rollout_speeds)
+            viz_config_dict["rolloutTrajLineIds"].extend([p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds_normed[t], 0.], lineWidth=5) for t in range(rollout_traj.shape[0]-1)])
+        viz_config = namedtuple("viz_config", viz_config_dict.keys())(**viz_config_dict)
+        config_dict = config._asdict()
+        config_dict["VIZ"] = viz_config
+        config = namedtuple("tracking_config", config_dict.keys())(**config_dict)
+    else:
+        for ref_traj in ref_traj_arr:
+            ref_speeds = np.linalg.norm(ref_traj[:, 3:6], axis=1)
+            ref_speeds_normed = (ref_speeds - np.min(ref_speeds)) / (np.max(ref_speeds) - np.min(ref_speeds))
+            if np.any(np.isnan(ref_speeds_normed)):
+                ref_speeds_normed = ref_speeds / np.max(ref_speeds)
+            for t in range(ref_traj.shape[0] - 1):
+                p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds_normed[t]], lineWidth=5, replaceItemUniqueId=config.VIZ.refTrajLineIds[t])
+        for rollout_traj in rollout_traj_arr:
+            rollout_speeds = np.linalg.norm(rollout_traj[:, 3:6], axis=1)
+            rollout_speeds_normed = (rollout_speeds - np.min(rollout_speeds)) / (np.max(rollout_speeds) - np.min(rollout_speeds))
+            if np.any(np.isnan(rollout_speeds_normed)):
+                rollout_speeds_normed = rollout_speeds / np.max(rollout_speeds)
+            for t in range(rollout_traj.shape[0] - 1):
+                p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds_normed[t], 0.], lineWidth=5, replaceItemUniqueId=config.VIZ.rolloutTrajLineIds[t])
+    return config
+
 
 
 ######################## MPL VIZUALIZATION ########################

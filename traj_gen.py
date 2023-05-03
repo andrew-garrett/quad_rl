@@ -53,7 +53,7 @@ class TrajectoryGenerator:
         self.t_start_vec = np.hstack(
             (np.zeros(1), np.cumsum( self.dist_vec[:-1] / self.config.speed, axis=0)) # self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))
         )
-        self.T_horizon = self.t_start_vec[-1]
+        self.t_finish = self.t_start_vec[-1]
         self.t_segment_vec = np.diff(self.t_start_vec) # Define length of time for each segment, hence size=(self.n_wpts-1,)
 
         self.is_done = False # Indicator for task completion 
@@ -128,7 +128,7 @@ class TrajectoryGenerator:
 
         """
         # If we are close to the final waypoint:
-        if t+0.25 >= self.T_horizon:
+        if t+0.25 >= self.t_finish:
             # Set the desired state to be stationary at the final waypoint
             x = self.points[-1]
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
@@ -344,7 +344,7 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         """
         t_diff = self.t_start_vec - t
         last_tstart_ind = np.argwhere(t_diff <= 0)[-1, 0]
-        if t+0.25 >= self.T_horizon:
+        if t+0.25 >= self.t_finish:
             x = self.points[-1]
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
             self.is_done = True

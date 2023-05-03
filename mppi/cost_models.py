@@ -44,7 +44,7 @@ class CostModel:
 
     Parameterized by mppi_config, and uses a METHOD in (numpy, cupy, and torch) for array operations
     """
-    def __init__(self, config, state_des):
+    def __init__(self, config):
         self.config = config
         self.METHOD = self.config.METHOD
 
@@ -53,6 +53,7 @@ class CostModel:
         self.SYSTEM_NOISE_INV = self.METHOD.asarray(self.SYSTEM_NOISE_INV, dtype=self.config.DTYPE) # CP and NP and TORCH
         self.U_SHAPE_ARR = self.METHOD.ones((self.config.K, self.config.U_SPACE)) # CP and NP and TORCH
         self.U_SHAPE_ARR = self.METHOD.asarray(self.U_SHAPE_ARR, dtype=self.config.DTYPE) # CP and NP and TORCH
+        """
         if state_des is not None:
             self.state_des = self.METHOD.asarray(state_des, dtype=self.config.DTYPE) # CP and NP and TORCH
             if len(state_des.shape) <= 1:
@@ -61,6 +62,7 @@ class CostModel:
                 self.state_des = state_des
             if self.METHOD.__name__ == "torch":
                 self.state_des = self.state_des.to(device=self.config.DEVICE)
+        """
         if self.METHOD.__name__ == "torch":
             self.Q = self.Q.to(device=self.config.DEVICE)
             self.SYSTEM_NOISE_INV = self.SYSTEM_NOISE_INV.to(device=self.config.DEVICE)
@@ -70,15 +72,16 @@ class CostModel:
         self.state_des = self.METHOD.asarray(state_des, dtype=self.config.DTYPE) # CP and NP and TORCH
         if len(state_des.shape) <= 1:
             self.state_des = self.state_des.reshape(1, -1) # CP and NP and TORCH
-        
+
     def compute_state_cost(self, state):
         """
         Compute state-dependent cost
         """
-        if len(state.shape) <= 1:
-            state = state.reshape(1, -1)
-        delta_x = state - self.state_des
-        state_cost = self.METHOD.einsum("ij,kj,ik->i", delta_x, self.Q, delta_x) # dx^T @ Q @ dx
+        state, state_des = state
+        state = state.reshape(int(state.size / self.config.X_SPACE), self.config.X_SPACE)
+        state_des = state_des.reshape(int(state_des.size / self.config.X_SPACE), self.config.X_SPACE)
+        dx = state - state_des
+        state_cost = self.METHOD.einsum("ij,kj,ik->i", dx, self.Q, dx) # dx^T @ Q @ dx
         state_cost += 1e10*self.METHOD.sum(state[:, 2] <= 0) # CRASH COST
         return state_cost
 
@@ -103,6 +106,10 @@ class CostModel:
         return self.config.TEMPERATURE * control_cost
 
     def __call__(self, state, u):
+        """
+        state = (current_state, desired_state)
+        u = (u_tm1, du_tm1)
+        """
         return self.compute_state_cost(state) # + self.compute_control_cost(u)
     
 
