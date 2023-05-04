@@ -194,6 +194,23 @@ DEBUG_TASK_BATTERY = {
                 "min_snap"
             ]
         }
+    },
+    "figure_eight": {
+        "taskcase_generator": "generate_figure_eight_tasks",
+        "params": {
+            "num_drones": NUM_DRONES,
+            "ax": ["x"],
+            "dh": [0.0],
+            "radii": [1.0, 2.0],
+            "rdp_threshold": [0.025, 0.1, 0.25],
+            "res": [0.25, 0.5],
+            "speed": [LOW_SPEED],
+            "trajectory_generator": [
+                # "constant_speed",
+                # "cubic_spline", 
+                "min_snap"
+            ]
+        }
     }
 }
 
