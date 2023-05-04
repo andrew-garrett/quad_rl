@@ -223,13 +223,16 @@ config = get_mppi_config()
 testAnalytical = AnalyticalModel(config) 
 #flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
 flight_file = "PYBD2.npy"
+#flight_file = "test_data_dyn2.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
 """TEST FOR PYB DATA (EXPLICIT = FALSE)"""
+
 testAnalyticalPYB = AnalyticalModel(config, explicit=False) 
-AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state, "Analytical Model PYB")
+AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state[:, :], "Analytical Model PYB")
 AnalyticalTester.runModelStep(printout=False)
+
 # AnalyticalTester.linear_absolute_error()
 # AnalyticalTester.rotational_absolute_error()
 
