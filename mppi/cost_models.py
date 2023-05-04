@@ -53,16 +53,7 @@ class CostModel:
         self.SYSTEM_NOISE_INV = self.METHOD.asarray(self.SYSTEM_NOISE_INV, dtype=self.config.DTYPE) # CP and NP and TORCH
         self.U_SHAPE_ARR = self.METHOD.ones((self.config.K, self.config.U_SPACE)) # CP and NP and TORCH
         self.U_SHAPE_ARR = self.METHOD.asarray(self.U_SHAPE_ARR, dtype=self.config.DTYPE) # CP and NP and TORCH
-        """
-        if state_des is not None:
-            self.state_des = self.METHOD.asarray(state_des, dtype=self.config.DTYPE) # CP and NP and TORCH
-            if len(state_des.shape) <= 1:
-                self.state_des = state_des.reshape(1, -1) # CP and NP and TORCH
-            else:
-                self.state_des = state_des
-            if self.METHOD.__name__ == "torch":
-                self.state_des = self.state_des.to(device=self.config.DEVICE)
-        """
+
         if self.METHOD.__name__ == "torch":
             self.Q = self.Q.to(device=self.config.DEVICE)
             self.SYSTEM_NOISE_INV = self.SYSTEM_NOISE_INV.to(device=self.config.DEVICE)
@@ -110,7 +101,7 @@ class CostModel:
         state = (current_state, desired_state)
         u = (u_tm1, du_tm1)
         """
-        return self.compute_state_cost(state) # + self.compute_control_cost(u)
+        return self.compute_state_cost(state) + self.compute_control_cost(u)
     
 
     

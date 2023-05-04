@@ -137,7 +137,7 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
         ref_traj_arr, rollout_traj_arr = [], []
         for k in range(env.NUM_DRONES):
             ctrl[k].set_reference_trajectory(t, trajectory, env.INIT_XYZS[k], target_vel[k], target_rpy[k], target_rpy_rates[k])
-        #Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
+        # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
             if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
                 ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
                 if ref_traj_k is not None:
@@ -192,7 +192,7 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
     # t_swap < 0 means:  use baseline PID controller for entire trajectory
     # t_swap = 0 means:  use other controller for the entire trajectory
     # t_swap > 0 means:  use baseline PID controller until t_swap, then use other controller from t_swap onwards
-    t_swap = 0
+    t_swap = 0.0
     while t_counter < int(config.T_FINISH*env.SIM_FREQ):
         
         #### Step the simulation ###########################################################
