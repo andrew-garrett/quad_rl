@@ -170,29 +170,12 @@ AGGRESSIVE_TASK_BATTERY = {
 
 DEBUG_TASK_BATTERY = {
 
-    # "straight_away": {
-    #     "taskcase_generator": "generate_straight_away_tasks",
-    #     "params": {
-    #         "num_drones": NUM_DRONES,
-    #         "ax": ["x", "y"],
-    #         "speed": [HIGH_SPEED]
-    #     }
-    # },
-    "figure_eight": {
-        "taskcase_generator": "generate_figure_eight_tasks",
+    "straight_away": {
+        "taskcase_generator": "generate_straight_away_tasks",
         "params": {
             "num_drones": NUM_DRONES,
-            "ax": ["x"],
-            "dh": [0.0],
-            "radii": [2.0],
-            "rdp_threshold": [0.25],
-            "res": [0.1],
-            "speed": [HIGH_SPEED],
-            "trajectory_generator": [
-                # "constant_speed",
-                # "cubic_spline", 
-                "min_snap"
-            ]
+            "ax": ["x", "y"],
+            "speed": [HIGH_SPEED]
         }
     },
     "figure_eight": {
