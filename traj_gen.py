@@ -189,13 +189,13 @@ class TrajectoryGenerator:
             rdp_dists = np.array(rdp_dists)
             normed_dists = (rdp_dists - np.min(rdp_dists)) / (np.max(rdp_dists) - np.min(rdp_dists))
             if np.any(np.isnan(normed_dists)):
-                normed_dists = self.rdp_dists
+                normed_dists = rdp_dists
         else:
             normed_dists = (self.dist_vec[:-1] - np.min(self.dist_vec[:-1])) / (np.max(self.dist_vec[:-1]) - np.min(self.dist_vec[:-1]))
             if np.any(np.isnan(normed_dists)):
                 normed_dists = self.dist_vec[:-1]
         ##### Generate speed vector (proportional to segment length) and time-segments assuming constant speed 
-        speed_vec = self.config.speed + normed_dists*1.5
+        speed_vec = self.config.speed + normed_dists*1.
         self.speed_vec = np.append(speed_vec, 0.)
         # self.speed_vec[0] *= 0.6
         # self.speed_vec[-2:] *= [0.6, 0.0]

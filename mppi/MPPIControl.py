@@ -163,7 +163,6 @@ class MPPIControl(DSLPIDControl):
         state_t = trajectory.update(t_ref)
         self.reference_trajectory[-1] = np.hstack((state_t["x"] + target_pos_i, state_t["x_dot"], target_rpy_i, target_rpy_rates_i))
         # TODO: This may be BUGGY
-        # self.mppi_node.reset(desired_traj=deepcopy(self.reference_trajectory[1:]))
         self.reference_trajectory = np.roll(self.reference_trajectory, -1, 0)
         if self.cur_state is None:
             self.cur_state = self.reference_trajectory[-1]
@@ -194,10 +193,10 @@ class MPPIControl(DSLPIDControl):
             ref_traj = self.reference_trajectory[:-1]
         if rollout:
             rollout_traj = np.zeros((self.mppi_config.T+1, self.mppi_config.X_SPACE))
-            rollout_traj[0] = self.cur_state
+            rollout_traj[0] = deepcopy(self.cur_state)
             for t_ind in range(1, self.mppi_config.T+1):
-                x_tm1 = rollout_traj[t_ind-1].reshape(1, -1)
-                u_tm1 = self.mppi_node.U[t_ind-1].reshape(1, -1)
+                x_tm1 = deepcopy(rollout_traj[t_ind-1]).reshape(1, -1)
+                u_tm1 = deepcopy(self.mppi_node.U[t_ind-1]).reshape(1, -1)
                 rollout_traj[t_ind] = self.mppi_node.F(x_tm1, u_tm1).flatten()
             rollout_traj = np.roll(rollout_traj, -1, 0)[:-1]
         return (ref_traj, rollout_traj)

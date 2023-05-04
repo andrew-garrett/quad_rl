@@ -9,13 +9,13 @@
 	"OFFSET": 1.0,
 	"PHYSICS": "dyn",
 	"PLOT": false,
-	"RECORD": true,
+	"RECORD": false,
 	"SIMULATION_FREQ_HZ": 240,
 	"TARGET_NOISE_MODEL": {
 		"sigma_p": 0.01,
 		"sigma_r": 0.01,
 		"sigma_v": 0.01
 	},
-	"USER_DEBUG_GUI": true,
+	"USER_DEBUG_GUI": false,
 	"VISION": false
 }
