@@ -100,7 +100,6 @@ if __name__ == "__main__":
         ROOT = os.path.join("./bootstrap/datasets/", base_config["PHYSICS"])
     # Get the visualization/data collection config specified by the CLI argument 
     config_fpath = f"./configs/tracking/{ARGS.tracking_config}_tracking_config.json"
-    # config_fpath = f"./configs/tracking/data_tracking_config.json"
     if "debug" in config_fpath:
         VERBOSE = True
     with open(config_fpath, "r") as f:

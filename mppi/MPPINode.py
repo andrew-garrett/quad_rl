@@ -251,11 +251,11 @@ class MPPI:
             v_tm1 = u_tm1 + du_tm1
             # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
-            # Compute the cost of taking the perturbed optimal control
-            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) * self.config.DT
+            # Compute the cost of taking the perturbed optimal control (Discounted such that earlier timestep's error carry more weight)
+            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) * (1.0 - t / (self.config.T)) # / self.config.DT
 
         # Terminal Cost
-        # self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :]))
+        self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :])) # / self.config.DT
 
         # Compute the importance sampling weights
         self.compute_weights()

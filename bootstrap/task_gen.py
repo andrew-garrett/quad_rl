@@ -237,9 +237,10 @@ class Tasks:
 
                     num_wpts = 1000
                     t = np.linspace(0, DEFAULT_T, num=num_wpts)
-                    long_axis = np.cos(r*t)
-                    short_axis = 0.5 * np.sin(r*t) * long_axis
-                    perp_axis = np.sin(dh*t)
+                    long_axis = r * np.sqrt(2) * np.cos(t) / (np.sin(t)**2 + 1)
+                    short_axis = r * np.sqrt(2) * np.cos(t) * np.sin(t) / (np.sin(t)**2 + 1)
+                    perp_axis = np.zeros_like(short_axis)
+
                     for t_step in range(num_wpts):
                         if ax == "x":
                             row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]

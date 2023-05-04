@@ -197,8 +197,8 @@ class TrajectoryGenerator:
         ##### Generate speed vector (proportional to segment length) and time-segments assuming constant speed 
         speed_vec = self.config.speed + normed_dists*1.5
         self.speed_vec = np.append(speed_vec, 0.)
-        self.speed_vec[0] *= 0.6
-        self.speed_vec[-2:] *= [0.6, 0.0]
+        # self.speed_vec[0] *= 0.6
+        # self.speed_vec[-2:] *= [0.6, 0.0]
         self.vel_vecs = self.speed_vec.reshape(-1, 1) * self.unit_vecs
         self.t_start_vec = np.hstack(
             (np.zeros(1), np.cumsum(self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))
@@ -435,7 +435,7 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         """
         Use minimal acceleration to generate a smooth yaw trajectory
         """
-        init_yaw = 0. # np.pi / 2. # This is the initial yaw in the sim
+        init_yaw = -np.pi / 2. # This is the initial yaw in the sim
         rpy_points = []
         for i, t_start in enumerate(self.t_start_vec[:-1]):
             ##### Get velocity and accleration at each waypoint

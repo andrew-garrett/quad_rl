@@ -41,7 +41,7 @@ The main functionalities are given below
 
 ### To collect the default trajectory dataset:
 ```
-python bootstrap/boot_strap.py --tracking_config data
+python bootstrap/boot_strap.py --tracking-config data
 ```
 
 ### To visualize the default trajectory dataset:
@@ -79,7 +79,7 @@ Here is a brief description of each choice for the `--tracking-config` argument:
 
  Note: Collecting Data take a few minutes, and visualization slows things down a good bit.  `--tracking-config debug_video_data` offers the most verbose data collection but is quite slow.  `--tracking-config data` or `--tracking-config default` are the two quickest procedures.  mp4s are created from images taken at each control timestep, which are muxxed such that the fps closely matches the control frequency.  Up to 8 quadrotors can be visualized in the simulator, but dataset collection is performed with somewhere between 27 and 64 drones per dataset.
 
- To change the physics model used by pybullet, change the control frequency, set postional offsets of the drones, and other simulation environment related parameters, consider changing values in [`./configs/tracking/tracking_config.json`](./configs/tracking/tracking_config.json).
+ To change the physics model used by pybullet, change the control frequency, set postional offsets of the drones, and other simulation environment related parameters, consider changing values in [`configs/tracking/tracking_config.json`](./configs/tracking/tracking_config.json).
 
 
 ## Dynamics Model Training
@@ -110,7 +110,7 @@ optional arguments:
   --max_rpm MAX_RPM     Maximum RPM value in dataset (default: 21702.6438)
 ```
 
-Training hyperparameters are stored in [`./configs/training_config.json`](./configs/training_config.json), and can be easily configured for
+Training hyperparameters are stored in [`configs/training_config.json`](./configs/training_config.json), and can be easily configured for
 experiments.
 
 ### To train a dynamics neural network on a torch dataset:
@@ -123,7 +123,7 @@ python train_dynamics_model.py
 python train_dynamics_model.py --sweep ./configs/sweep_config.json
 ```
 
-The [`./configs/sweep_config.json`](./configs/sweep_config.json) can be used to test different parameters in a dedicated config file, and log their results to WandB.
+The [`configs/sweep_config.json`](./configs/sweep_config.json) can be used to test different parameters in a dedicated config file, and log their results to WandB.
 This module is also compatible with Hyperparameter Sweeps on Weights and Biases (WandB).  [Here](./) is our current WandB
 project with data from lots of bad models and a few very good ones.
 

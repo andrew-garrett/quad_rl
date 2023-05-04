@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # from pytorch_mppi.mppi import MPPI # UM-ARM Lab's MPPI Implementation, used for reference
 
-import mppi.MPPI_Node as MPPI_Node
+import mppi.MPPINode as MPPI_Node
 
 class MPPITest_v2:
     """
