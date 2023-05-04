@@ -166,20 +166,20 @@ class CustomLogger(Logger):
         #### RPY ###################################################
         row = 3
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, self.states[j, 6, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 6, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.states[j, 3, :], label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 3, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('r (rad)')
         row = 4
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, self.states[j, 7, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 7, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.states[j, 4, :], label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 4, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('p (rad)')
         row = 5
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, np.unwrap(self.states[j, 8, :]), label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 8, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, np.unwrap(self.states[j, 5, :]), label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 5, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('y (rad)')
 
@@ -215,41 +215,41 @@ class CustomLogger(Logger):
         #### Velocity ##############################################
         row = 0
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, self.states[j, 3, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 3, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.states[j, 6, :], label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 6, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vx (m/s)')
         row = 1
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, self.states[j, 4, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 4, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.states[j, 7, :], label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 7, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vy (m/s)')
         row = 2
         for j in range(self.NUM_DRONES):
-            axs[row, col].plot(t, self.states[j, 5, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 5, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.states[j, 8, :], label="drone_"+str(j))
+            axs[row, col].plot(t, self.controls[j, 8, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vz (m/s)')
 
         #### RPY Rates #############################################
         row = 3
         for j in range(self.NUM_DRONES):
-            rdot = np.hstack([0, (self.states[j, 6, 1:] - self.states[j, 6, :-1]) * self.LOGGING_FREQ_HZ ])
+            rdot = np.hstack([0, (self.states[j, 3, 1:] - self.states[j, 3, :-1]) * self.LOGGING_FREQ_HZ ])
             axs[row, col].plot(t, rdot, label="drone_"+str(j))
             axs[row, col].plot(t, self.controls[j, 9, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('rdot (rad/s)')
         row = 4
         for j in range(self.NUM_DRONES):
-            pdot = np.hstack([0, (self.states[j, 7, 1:] - self.states[j, 7, :-1]) * self.LOGGING_FREQ_HZ ])
+            pdot = np.hstack([0, (self.states[j, 4, 1:] - self.states[j, 4, :-1]) * self.LOGGING_FREQ_HZ ])
             axs[row, col].plot(t, pdot, label="drone_"+str(j))
             axs[row, col].plot(t, self.controls[j, 10, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('pdot (rad/s)')
         row = 5
         for j in range(self.NUM_DRONES):
-            ydot = np.hstack([0, (np.unwrap(self.states[j, 8, 1:]) - np.unwrap(self.states[j, 8, :-1])) * self.LOGGING_FREQ_HZ ])
+            ydot = np.hstack([0, (np.unwrap(self.states[j, 5, 1:]) - np.unwrap(self.states[j, 5, :-1])) * self.LOGGING_FREQ_HZ ])
             axs[row, col].plot(t, ydot, label="drone_"+str(j))
             axs[row, col].plot(t, self.controls[j, 11, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
