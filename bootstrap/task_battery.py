@@ -11,7 +11,7 @@ import numpy as np
 
 
 NO_SPEED = 0.0 # m/s
-BASE_SPEED = 0.5 # m/s
+BASE_SPEED = 1.0 # m/s
 LOW_SPEED = 0.5*BASE_SPEED # m/s
 MED_SPEED = 1.0*BASE_SPEED # m/s
 HIGH_SPEED = 1.5*BASE_SPEED # m/s
@@ -170,48 +170,48 @@ AGGRESSIVE_TASK_BATTERY = {
 
 DEBUG_TASK_BATTERY = {
 
-    "straight_away": {
-        "taskcase_generator": "generate_straight_away_tasks",
-        "params": {
-            "num_drones": NUM_DRONES,
-            "ax": ["x", "y"],
-            "speed": [HIGH_SPEED]
-        }
-    },
-    "figure_eight": {
-        "taskcase_generator": "generate_figure_eight_tasks",
-        "params": {
-            "num_drones": NUM_DRONES,
-            "ax": ["y"],
-            "dh": [0.0],
-            "radii": [2.0, 4.0],
-            "rdp_threshold": [0.025, 0.1],
-            "res": [0.25, 0.5],
-            "speed": [MED_SPEED],
-            "trajectory_generator": [
-                # "constant_speed",
-                # "cubic_spline", 
-                "min_snap"
-            ]
-        }
-    },
+    # "straight_away": {
+    #     "taskcase_generator": "generate_straight_away_tasks",
+    #     "params": {
+    #         "num_drones": NUM_DRONES,
+    #         "ax": ["x", "y"],
+    #         "speed": [HIGH_SPEED]
+    #     }
+    # },
     "figure_eight": {
         "taskcase_generator": "generate_figure_eight_tasks",
         "params": {
             "num_drones": NUM_DRONES,
             "ax": ["x"],
             "dh": [0.0],
-            "radii": [1.0, 2.0],
-            "rdp_threshold": [0.025, 0.1, 0.25],
-            "res": [0.25, 0.5],
-            "speed": [LOW_SPEED],
+            "radii": [2.0, 4.0],
+            "rdp_threshold": [0.025, 0.1],
+            "res": [0.25],
+            "speed": [HIGH_SPEED],
             "trajectory_generator": [
                 # "constant_speed",
                 # "cubic_spline", 
                 "min_snap"
             ]
         }
-    }
+     } # 
+    # "figure_eight": {
+    #     "taskcase_generator": "generate_figure_eight_tasks",
+    #     "params": {
+    #         "num_drones": NUM_DRONES,
+    #         "ax": ["x"],
+    #         "dh": [0.0],
+    #         "radii": [1.0, 2.0],
+    #         "rdp_threshold": [0.025, 0.1, 0.25],
+    #         "res": [0.25, 0.5],
+    #         "speed": [LOW_SPEED],
+    #         "trajectory_generator": [
+    #             # "constant_speed",
+    #             # "cubic_spline", 
+    #             "min_snap"
+    #         ]
+    #     }
+    # }
 }
 
 

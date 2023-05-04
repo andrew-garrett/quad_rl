@@ -159,6 +159,7 @@ class MPPI:
             self.F = getattr(dynamics_models, f_config.DYNAMICS_MODEL)(f_config)
             self.analytical_model = getattr(dynamics_models, "AnalyticalModel")(f_config)
         except:
+            breakpoint()
             self.F = dynamics_models.DynamicsModel(f_config)
         
         # Functional Cost Model
@@ -249,16 +250,10 @@ class MPPI:
 
         # iteratively sample T-length trajectories, K times in parallel
         curr_discount = 1.0
-        df = 0.7
-        discount_factors = np.zeros(self.config.T)
-        for t in range(self.config.T-1, -1, -1):
-        #for t in range(0, self.config.T):
-            discount_factors[t] = curr_discount
-            curr_discount *= df
+        df = 0.99
         
         for t in range(1, self.config.T+1):
             #curr_discount *= self.config.DISCOUNT
-            curr_discount = discount_factors[t-1]
             # Get the current control
             u_tm1 = self.U[t-1]
             # Perturb the current control
@@ -267,10 +262,11 @@ class MPPI:
             # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
             # Compute the cost of taking the perturbed optimal control
-            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) * self.config.DT
+            self.COST_MAP += curr_discount*self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) #* self.config.DT
+            curr_discount *= df
 
         # Terminal Cost
-        # self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :]))
+        self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :]))
 
         # Compute the importance sampling weights
         self.compute_weights()

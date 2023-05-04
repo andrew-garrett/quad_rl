@@ -198,6 +198,6 @@ class MPPIControl(DSLPIDControl):
             for t_ind in range(1, self.mppi_config.T+1):
                 x_tm1 = rollout_traj[t_ind-1].reshape(1, -1)
                 u_tm1 = self.mppi_node.U[t_ind-1].reshape(1, -1)
-                rollout_traj[t_ind] = self.mppi_node.F(x_tm1, u_tm1).flatten()
+                rollout_traj[t_ind] = self.mppi_node.F(deepcopy(x_tm1), deepcopy(u_tm1)).flatten()
             rollout_traj = np.roll(rollout_traj, -1, 0)[:-1]
         return (ref_traj, rollout_traj)

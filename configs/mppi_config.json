@@ -2,7 +2,7 @@
 	"ALPHA": 0.0,
 	"COST_MODEL": "CostModel",
 	"DTYPE": "float64",
-	"DYNAMICS_MODEL": "AnalyticalModel",
+	"DYNAMICS_MODEL": "SampleLearnedModel",
 	"FREQUENCY": 48,
 	"K": 256,
 	"METHOD": "numpy",

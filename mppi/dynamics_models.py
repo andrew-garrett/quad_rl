@@ -17,6 +17,7 @@ import torch
 
 
 from training.lightning import DynamicsLightningModule
+from training.nn import DynamicsNet
 
 #################### FUNCTIONAL DYNAMICS MODEL ####################
 ###################################################################
@@ -84,8 +85,11 @@ class DynamicsModel:
         """
         Approximate next state given current state and control
         """
-        new_state = self.postprocess(self.step_dynamics(self.preprocess(state, u)))
-        return new_state
+        preproc = self.preprocess(state, u)
+        proc = self.step_dynamics(preproc)
+        postproc = self.postprocess(proc)
+        #new_state = self.postprocess(self.step_dynamics(self.preprocess(state, u)))
+        return postproc
 
 
 
@@ -194,6 +198,7 @@ class SampleLearnedModel(DynamicsModel):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.parse_config()
 
         self.nn.eval()
@@ -208,7 +213,12 @@ class SampleLearnedModel(DynamicsModel):
         self.training_config_path = self.config.NN_CONFIG_PATH
         with open(self.training_config_path, "r") as f:
             self.training_config = json.load(f)
-        self.nn = DynamicsLightningModule.load_from_checkpoint(self.nn_ckpt_path, config=self.training_config, log_dir=None)
+        checkpoint = torch.load(self.nn_ckpt_path, map_location=self.device)
+        self.nn = DynamicsNet(config=self.training_config)
+        new_state_dict = {}
+        for k in checkpoint["state_dict"].keys():
+            new_state_dict[k.replace("model.", "")] = checkpoint["state_dict"][k]
+        self.nn.load_state_dict(new_state_dict)
         self.max_rpm = self.config.CF2X.MAX_RPM
     
     def normalize(self, val, minval, maxval):
@@ -235,6 +245,7 @@ class SampleLearnedModel(DynamicsModel):
         nn_input = np.concatenate([np.sin(rpy), np.cos(rpy), velo, rpy_rates, u], axis=1)
         nn_input = torch.tensor(nn_input)
         nn_input_normalized = self.normalize(nn_input, self.state_min, self.state_max)
+        #breakpoint()
         return state, nn_input_normalized #preprocessed
 
     def step_dynamics(self, input):
@@ -244,7 +255,7 @@ class SampleLearnedModel(DynamicsModel):
         """
         state, nn_input = input
         with torch.no_grad():
-            nn_output = self.nn.model(nn_input.float(), None)
+            nn_output = self.nn(nn_input.float(), None)
         return state, nn_output
 
     def postprocess(self, output):
