@@ -161,16 +161,15 @@ class AnalyticalModel(DynamicsModel):
         
         #Apply kinematic equations (same way it is done in dynamics)
         velo_dt = velo + accel * dt
-        xyz_dt = xyz + velo_dt * dt
+        xyz_dt = xyz + velo * dt
         
         #same for rotation 
-        #if self.is_explicit:
         rpy_rates_dt = rpy_rates + omega_dot * dt
-        # else:
-        #     d_R_w = Rotation.from_euler(('xyz'), rpy)
-        #     rpy_rates_dt = rpy_rates + (d_R_w.apply(omega_dot)) * dt
 
-        rpy_dt = rpy + rpy_rates_dt * dt
+        if self.is_explicit:
+            rpy_dt = rpy + rpy_rates * dt
+        else: 
+            rpy_dt = rpy + Rotation.from_euler(('xyz'), rpy).inv().apply(rpy_rates) * dt
 
         rpy_wrapped = deepcopy(rpy_dt)
         rpy_wrapped[:,[0,2]] = (rpy_wrapped[:,[0,2]] + np.pi) % (2 * np.pi) - np.pi

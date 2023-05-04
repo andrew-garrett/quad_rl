@@ -43,19 +43,22 @@ class TestDynamics():
                 print(self.s_pred[:, i-1])
                 print("---------")
 
-    def runModelRollout(self):
+    def trajPrediction(self, rollout = True):
         """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUDNING ERROR"""
-        self.rollout = np.zeros((12, self.n-1))
+        self.rollout = np.zeros((12, self.n))
 
         self.rolled_accelerations = np.zeros((6, self.n-1))
-
+        self.rollout[:, 0] = self.data[:12, 0]
         #rollout trajectory
-        for i in range(self.n-1):
-            s_in = self.data[:12, i] #previous predicted state
-            u_in = self.data[12:, i+1] #requested control
+        for i in range(1, self.n):
+            if rollout:
+                s_in = self.rollout[:12, i-1] #previous predicted state
+            else:
+                s_in = self.data[:12, i-1]
+
+            u_in = self.data[12:, i] #requested control
             self.rollout[:, i] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1))
-            self.rolled_accelerations[:, i] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1))
-            pass
+            self.rolled_accelerations[:, i-1] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1))
 
 
     def compareTraj(self):
@@ -220,45 +223,25 @@ config = get_mppi_config()
 #Create dyanmics model object
 testAnalytical = AnalyticalModel(config) 
 #flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
-#flight_file = "test_data_dyn2.npy"
-
-#flight_file = "newAggroFile.npy"
-#flight_file = "save-flight-04.19.2023_22.12.05.npy"
 flight_file = "PYBD2.npy"
+#flight_file = "test_data_dyn2.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
-#Run Tester Class
-# AnalyticalTester = TestDynamics(testAnalytical, test_state, "Analytical Model")
-# AnalyticalTester.runModelStep(printout=False)
-# # AnalyticalTester.linear_absolute_error()
-# # AnalyticalTester.rotational_absolute_error()
-
-# AnalyticalTester.runModelRollout()
-# AnalyticalTester.compareTraj()
-# AnalyticalTester.compare_accels()
+"""TEST FOR PYB DATA (EXPLICIT = FALSE)"""
 
 testAnalyticalPYB = AnalyticalModel(config, explicit=False) 
-AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state, "Analytical Model PYB")
+AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state[:, :], "Analytical Model PYB")
 AnalyticalTester.runModelStep(printout=False)
+
 # AnalyticalTester.linear_absolute_error()
 # AnalyticalTester.rotational_absolute_error()
 
-AnalyticalTester.runModelRollout()
+AnalyticalTester.trajPrediction() #WITH ROLLOUT 
+#AnalyticalTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
 AnalyticalTester.compareTraj()
 AnalyticalTester.compare_accels()
 
-"""DOESNT WORK FOR PYB DATA YET (where explicit = False)"""
-# #Create dyanmics model object
-# testAnalyticalPYB = AnalyticalModel(config, explicit = False) 
-# test_data = np.load("test_data_new.npy")
-# test_state = test_data['states'][4]
-
-# #Run Tester Class
-# AnalyticalTesterPYB = TestDynamics(testAnalyticalPYB, test_state)
-# AnalyticalTesterPYB.runModel(printout=True)
-# AnalyticalTesterPYB.linear_absolute_error()
-# AnalyticalTesterPYB.rotational_absolute_error()
 
 print("end")
 

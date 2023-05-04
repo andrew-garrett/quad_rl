@@ -238,8 +238,8 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
                     drone=k,
                     timestamp=t_counter/env.SIM_FREQ,
                     state=obs[str(k)]["state"],
-                    control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]]),
-                    flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
+                    control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]])#,
+                    #flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
                 )
             if verbose and t_counter%env.SIM_FREQ == 0: #### Printout
                 env.render()
