@@ -33,7 +33,7 @@ def compute_traj_errors(traj_dir):
         desired_xyz = desired_states[0,:3]
         tracked_rpy = tracked_states[0,6:9]
         desired_rpy = desired_states[0,3:6]
-        
+
         xyz_error = np.mean(np.sqrt(np.sum((tracked_xyz - desired_xyz)**2, axis=0)))
         tracked_R = Rotation.from_euler('xyz', tracked_rpy.T)
         desired_R = Rotation.from_euler('xyz', desired_rpy.T)
@@ -43,8 +43,8 @@ def compute_traj_errors(traj_dir):
         xyz_errors.append(xyz_error)
         rpy_errors.append(rpy_error)
 
-    final_xyz_error = sum(xyz_errors) / len(traj_files)
-    final_rpy_error = sum(rpy_errors) / len(traj_files)
+    final_xyz_error = sum(xyz_errors) / len(xyz_errors)
+    final_rpy_error = sum(rpy_errors) / len(rpy_errors)
 
     return final_xyz_error, final_rpy_error
 
