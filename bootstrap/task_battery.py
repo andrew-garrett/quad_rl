@@ -175,7 +175,7 @@ DEBUG_TASK_BATTERY = {
         "params": {
             "num_drones": NUM_DRONES,
             "ax": ["x", "y"],
-            "speed": [HIGH_SPEED]
+            "speed": [MED_SPEED, HIGH_SPEED]
         }
     },
     "figure_eight": {
@@ -184,10 +184,10 @@ DEBUG_TASK_BATTERY = {
             "num_drones": NUM_DRONES,
             "ax": ["x"],
             "dh": [0.0],
-            "radii": [1.0, 2.0],
+            "radii": [1.5, 3.0],
             "rdp_threshold": [0.025, 0.1, 0.25],
-            "res": [0.25, 0.5],
-            "speed": [LOW_SPEED],
+            "res": [0.25],
+            "speed": [HIGH_SPEED],
             "trajectory_generator": [
                 # "constant_speed",
                 # "cubic_spline", 
