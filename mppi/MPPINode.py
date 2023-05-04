@@ -147,7 +147,7 @@ class MPPI:
     """
     Class to perform MPPI Algorithm
     """
-    def __init__(self, config, state_des) -> None:
+    def __init__(self, config) -> None:
 
         # Set MPPI Parameters
         self.config = config
