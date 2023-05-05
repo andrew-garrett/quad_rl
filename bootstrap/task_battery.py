@@ -16,7 +16,7 @@ LOW_SPEED = 0.5*BASE_SPEED # m/s
 MED_SPEED = 1.0*BASE_SPEED # m/s
 HIGH_SPEED = 1.5*BASE_SPEED # m/s
 AGGRO_MULTIPLIER = 1.5
-NUM_DRONES = 3 # number of drones along a single axis of a 3D cube configuration
+NUM_DRONES = 1 # number of drones along a single axis of a 3D cube configuration
 
 DEFAULT_ROOT = "./bootstrap/datasets/pyb/"
 DEFAULT_TASK_NAME = "linear_step.csv"
@@ -174,7 +174,7 @@ DEBUG_TASK_BATTERY = {
         "taskcase_generator": "generate_straight_away_tasks",
         "params": {
             "num_drones": NUM_DRONES,
-            "ax": ["x", "z"],
+            "ax": ["x", "y"],
             "speed": [MED_SPEED, HIGH_SPEED]
         }
     },
@@ -182,19 +182,36 @@ DEBUG_TASK_BATTERY = {
         "taskcase_generator": "generate_figure_eight_tasks",
         "params": {
             "num_drones": NUM_DRONES,
-            "ax": ["z"],
-            "dh": [1.0, 2.0],
-            "radii": [1.0, 2.0],
+            "ax": ["x"],
+            "dh": [0.0],
+            "radii": [1.5, 3.0],
             "rdp_threshold": [0.025, 0.1, 0.25],
-            "res": [0.25, 0.5],
-            "speed": [MED_SPEED],
+            "res": [0.25],
+            "speed": [HIGH_SPEED],
             "trajectory_generator": [
                 # "constant_speed",
                 # "cubic_spline", 
                 "min_snap"
             ]
         }
-    }
+     } # 
+    # "figure_eight": {
+    #     "taskcase_generator": "generate_figure_eight_tasks",
+    #     "params": {
+    #         "num_drones": NUM_DRONES,
+    #         "ax": ["x"],
+    #         "dh": [0.0],
+    #         "radii": [1.0, 2.0],
+    #         "rdp_threshold": [0.025, 0.1, 0.25],
+    #         "res": [0.25, 0.5],
+    #         "speed": [LOW_SPEED],
+    #         "trajectory_generator": [
+    #             # "constant_speed",
+    #             # "cubic_spline", 
+    #             "min_snap"
+    #         ]
+    #     }
+    # }
 }
 
 

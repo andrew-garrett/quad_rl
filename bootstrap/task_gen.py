@@ -237,9 +237,10 @@ class Tasks:
 
                     num_wpts = 1000
                     t = np.linspace(0, DEFAULT_T, num=num_wpts)
-                    long_axis = np.cos(r*t)
-                    short_axis = 0.5 * np.sin(r*t) * long_axis
-                    perp_axis = np.sin(dh*t)
+                    long_axis = r * np.sqrt(2) * np.cos(t) / (np.sin(t)**2 + 1)
+                    short_axis = r * np.sqrt(2) * np.cos(t) * np.sin(t) / (np.sin(t)**2 + 1)
+                    perp_axis = np.zeros_like(short_axis)
+
                     for t_step in range(num_wpts):
                         if ax == "x":
                             row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]
@@ -302,7 +303,7 @@ class Tasks:
         dataset_name = f"{task_battery.name}_000"
         dataset_fpath = os.path.join(root, dataset_name)
         if os.path.exists(dataset_fpath) or os.path.exists(f"{dataset_fpath}.zip"):
-            new_dataset_ind = max([int(d.replace(".zip", "")[-3]) for d in os.listdir(root) if task_battery.name in d]) + 1
+            new_dataset_ind = max([int(d.replace(".zip", "")[-3:]) for d in os.listdir(root) if task_battery.name in d]) + 1
             dataset_name = f"{dataset_name[:-3]}{str(new_dataset_ind).zfill(3)}"
             dataset_fpath = os.path.join(root, dataset_name)
         os.makedirs(os.path.join(dataset_fpath, "waypoints"))

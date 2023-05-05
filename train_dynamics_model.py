@@ -26,10 +26,11 @@ def load_sweep_config(config, sweep_config_path):
     return config
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Dynamics Neural Network Training Script",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "--root",
-        default="./bootstrap/datasets/",
+        default="./bootstrap/datasets/dyn/",
         help="root where datasets are stored",
         type=str
     )
@@ -87,7 +88,7 @@ def build_trainer_module(config, experiment_dir, epochs):
     )
     try:
         trainer = pl.Trainer(
-            devices=-1,
+            devices=1,
             accelerator="gpu",
             max_epochs=epochs,
             log_every_n_steps=50,
