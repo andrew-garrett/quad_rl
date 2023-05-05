@@ -43,19 +43,22 @@ def compute_traj_errors(traj_dir):
         xyz_errors.append(xyz_error)
         rpy_errors.append(rpy_error)
 
-    final_xyz_error = sum(xyz_errors) / len(xyz_errors)
-    final_rpy_error = sum(rpy_errors) / len(rpy_errors)
+    xyz_errors = np.array(xyz_errors)
+    rpy_errors = np.array(rpy_errors)
 
-    return final_xyz_error, final_rpy_error
+    xyz_mean, xyz_std = (np.mean(xyz_errors), np.std(xyz_errors))
+    rpy_mean, rpy_std = (np.mean(rpy_errors), np.std(rpy_errors))
+
+    return xyz_mean, xyz_std, rpy_mean, rpy_std
 
 def save_print_errors(traj_dir, errors):
     error_dict = {
-        'xyz_error': errors[0],
-        'rpy_error': errors[1]
+        'xyz_error': {'mean': errors[0], 'std': errors[1]},
+        'rpy_error': {'mean': errors[2], 'std': errors[3]}
     }
 
     for k in error_dict.keys():
-        print(f"{k}: {error_dict[k]}")
+        print(f"{k}: {error_dict[k]['mean']} +/- {error_dict[k]['std']}")
     
     with open(os.path.join(traj_dir, 'eval_metrics.json'), 'w') as f:
         json.dump(error_dict, f)
