@@ -186,19 +186,18 @@ class TrajectoryGenerator:
                 rdp_end = self.points[rdp_ind]
                 rdp_dist = np.linalg.norm(rdp_end - rdp_start)
                 rdp_dists.extend([rdp_dist for j in range(rdp_inds[i-1], rdp_ind)])
-            rdp_dists = np.array(rdp_dists)
-            normed_dists = (rdp_dists - np.min(rdp_dists)) / (np.max(rdp_dists) - np.min(rdp_dists))
-            if np.any(np.isnan(normed_dists)):
-                normed_dists = rdp_dists
+            dists = np.array(rdp_dists)
         else:
-            normed_dists = (self.dist_vec[:-1] - np.min(self.dist_vec[:-1])) / (np.max(self.dist_vec[:-1]) - np.min(self.dist_vec[:-1]))
-            if np.any(np.isnan(normed_dists)):
-                normed_dists = self.dist_vec[:-1]
+            dists = self.dist_vec[:-1]
+        dist_norm = np.linalg.norm(dists)
+        if dist_norm > 0:
+            dists = dists / dist_norm
         ##### Generate speed vector (proportional to segment length) and time-segments assuming constant speed 
-        speed_vec = self.config.speed + normed_dists*1.
+        speed_vec = self.config.speed*np.ones_like(dists) + dists
         self.speed_vec = np.append(speed_vec, 0.)
-        # self.speed_vec[0] *= 0.6
-        # self.speed_vec[-2:] *= [0.6, 0.0]
+        ##### Speeding up in the first few waypoints
+        n_warmup_wpts = 5
+        self.speed_vec[:n_warmup_wpts] *= np.arange(1, n_warmup_wpts + 1) / n_warmup_wpts
         self.vel_vecs = self.speed_vec.reshape(-1, 1) * self.unit_vecs
         self.t_start_vec = np.hstack(
             (np.zeros(1), np.cumsum(self.dist_vec[:-1] / self.speed_vec[:-1], axis=0))

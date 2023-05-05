@@ -167,19 +167,19 @@ class CustomLogger(Logger):
         row = 3
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 6, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 3, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 6, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('r (rad)')
         row = 4
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 7, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 4, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 7, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('p (rad)')
         row = 5
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, np.unwrap(self.states[j, 8, :]), label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 5, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 8, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('y (rad)')
 
@@ -216,19 +216,19 @@ class CustomLogger(Logger):
         row = 0
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 3, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 6, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 3, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vx (m/s)')
         row = 1
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 4, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 7, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 4, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vy (m/s)')
         row = 2
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 5, :], label="drone_"+str(j))
-            axs[row, col].plot(t, self.controls[j, 8, :], label="drone_"+str(j)+"des")
+            axs[row, col].plot(t, self.controls[j, 5, :], label="drone_"+str(j)+"des")
         axs[row, col].set_xlabel('time')
         axs[row, col].set_ylabel('vz (m/s)')
 

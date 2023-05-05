@@ -195,17 +195,15 @@ class Tasks:
                 with open(task_fname, "w", newline="") as f:
                     csv_writer = csv.writer(f)
                     header = ["x", "y", "z"]
-                    if ax == "x":
-                        row = [5.0, 0.0, 0.0]
-                    elif ax == "y":
-                        row = [0.0, 5.0, 0.0]
-                    else:
-                        row = [0.0, 0.0, 5.0]
-                    footer = [0.0, 0.0, 0.0]
-                    
                     csv_writer.writerow(header)
-                    csv_writer.writerow(row)
-                    csv_writer.writerow(footer)
+                    for t in range(30):
+                        if ax == "x":
+                            row = [t, 0.0, 0.0]
+                        elif ax == "y":
+                            row = [0.0, t, 0.0]
+                        else:
+                            row = [0.0, 0.0, t]
+                        csv_writer.writerow(row)
         print("Straight-Away Tasks Generated")
         return
 
@@ -245,7 +243,7 @@ class Tasks:
                         if ax == "x":
                             row = [long_axis[t_step], short_axis[t_step], perp_axis[t_step]]
                         elif ax == "y":
-                            row = [perp_axis[t_step], long_axis[t_step], short_axis[t_step]]
+                            row = [short_axis[t_step], long_axis[t_step], perp_axis[t_step]]
                         else:
                             row = [short_axis[t_step], perp_axis[t_step], long_axis[t_step]]
                         csv_writer.writerow(row)

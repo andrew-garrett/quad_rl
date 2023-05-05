@@ -23,7 +23,8 @@ class MPPIControl(DSLPIDControl):
 
     def __init__(self,
                  drone_model: DroneModel,
-                 g: float=9.8
+                 g: float=9.8,
+                 physics_model: str="dyn"
                  ):
         """Common control classes __init__ method.
 
@@ -36,10 +37,10 @@ class MPPIControl(DSLPIDControl):
 
         """
         super().__init__(drone_model=drone_model, g=g)
-
+        self.physics_model = physics_model
         # Create an MPPI Node
         self.mppi_config = get_mppi_config()
-        self.mppi_node = MPPI(self.mppi_config)
+        self.mppi_node = MPPI(self.mppi_config, physics_model=physics_model)
         self.warmup_iters = self.mppi_config.T
         self.cur_state = None
         self.reference_trajectory = None

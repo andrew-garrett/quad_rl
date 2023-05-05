@@ -50,7 +50,7 @@ def cleanup(root, dataset_name, config_fpath="./configs/tracking/tracking_config
                     ##### If we have pngs saved, create videos with ffmpeg
                     if not os.path.exists(video_output_folder): 
                         os.makedirs(video_output_folder, exist_ok=True)
-                    command = f"ffmpeg -y -framerate {video_fps} -s 1920x1080 -i {os.path.join(folder, 'frame_%d.png')} -c:v libx264 -pix_fmt yuv420p {os.path.join(video_output_folder, str(os.path.basename(folder)).replace('.', '-') + '.mp4')} -report".split(" ")
+                    command = f"ffmpeg -y -framerate {video_fps} -s 1920x1080 -i {os.path.join(folder, 'frame_%d.png')} -c:v libx264 -pix_fmt yuv420p {os.path.join(video_output_folder, str(os.path.basename(folder)).replace('.', '-') + '.mp4')}".split(" ")
                     if subprocess.run(command).returncode == 0:
                         print ("FFmpeg Script Ran Successfully")
                     else:
@@ -67,7 +67,7 @@ def cleanup(root, dataset_name, config_fpath="./configs/tracking/tracking_config
                 zip_object.write(video_fpath, video_fpath[len(data_root):])
     if os.path.exists(f"{data_root}.zip"):
         ##### Delete the uncompressed dataset folder
-        shutil.rmtree(data_root)
+        # shutil.rmtree(data_root)
         return True
     else:
         return False
@@ -184,7 +184,7 @@ def get_viz(config_dict):
     markers["waypointSphereId"] = p.createVisualShape(
         shapeType=p.GEOM_SPHERE, 
         rgbaColor=[1, 0, 0, 1],
-        radius=sphereRadius
+        radius=sphereRadius*0.4
     )
     markers["flightSphereId"] = p.createVisualShape(
         shapeType=p.GEOM_SPHERE,
@@ -244,16 +244,16 @@ def render_rollouts(config, ref_traj_arr, rollout_traj_arr):
         viz_config_dict["rolloutTrajLineIds"] = []
         for ref_traj in ref_traj_arr:
             ref_speeds = np.linalg.norm(ref_traj[:, 3:6], axis=1)
-            ref_speeds_normed = (ref_speeds - np.min(ref_speeds)) / (np.max(ref_speeds) - np.min(ref_speeds))
-            if np.any(np.isnan(ref_speeds_normed)):
-                ref_speeds_normed = ref_speeds / np.max(ref_speeds)
-            viz_config_dict["refTrajLineIds"].extend([p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds_normed[t]], lineWidth=5) for t in range(ref_traj.shape[0]-1)])
+            ref_speeds_norm = np.linalg.norm(ref_speeds)
+            if ref_speeds_norm > 0:
+                ref_speeds /= ref_speeds_norm
+            viz_config_dict["refTrajLineIds"].extend([p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., ref_speeds[t]], lineWidth=5) for t in range(ref_traj.shape[0]-1)])
         for rollout_traj in rollout_traj_arr:
             rollout_speeds = np.linalg.norm(rollout_traj[:, 3:6], axis=1)
-            rollout_speeds_normed = (rollout_speeds - np.min(rollout_speeds)) / (np.max(rollout_speeds) - np.min(rollout_speeds))
-            if np.any(np.isnan(rollout_speeds_normed)):
-                rollout_speeds_normed = rollout_speeds / np.max(rollout_speeds)
-            viz_config_dict["rolloutTrajLineIds"].extend([p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds_normed[t], 0.], lineWidth=5) for t in range(rollout_traj.shape[0]-1)])
+            rollout_speeds_norm = np.linalg.norm(rollout_speeds)
+            if rollout_speeds_norm > 0:
+                rollout_speeds /= rollout_speeds_norm
+            viz_config_dict["rolloutTrajLineIds"].extend([p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., rollout_speeds[t], 0.], lineWidth=5) for t in range(rollout_traj.shape[0]-1)])
         viz_config = namedtuple("viz_config", viz_config_dict.keys())(**viz_config_dict)
         config_dict = config._asdict()
         config_dict["VIZ"] = viz_config
@@ -261,18 +261,18 @@ def render_rollouts(config, ref_traj_arr, rollout_traj_arr):
     else:
         for ref_traj in ref_traj_arr:
             ref_speeds = np.linalg.norm(ref_traj[:, 3:6], axis=1)
-            ref_speeds_normed = (ref_speeds - np.min(ref_speeds)) / (np.max(ref_speeds) - np.min(ref_speeds))
-            if np.any(np.isnan(ref_speeds_normed)):
-                ref_speeds_normed = ref_speeds / np.max(ref_speeds)
+            ref_speeds_norm = np.linalg.norm(ref_speeds)
+            if ref_speeds_norm > 0:
+                ref_speeds /= ref_speeds_norm
             for t in range(ref_traj.shape[0] - 1):
-                p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds_normed[t]], lineWidth=5, replaceItemUniqueId=config.VIZ.refTrajLineIds[t])
+                p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds[t]], lineWidth=5, replaceItemUniqueId=config.VIZ.refTrajLineIds[t])
         for rollout_traj in rollout_traj_arr:
             rollout_speeds = np.linalg.norm(rollout_traj[:, 3:6], axis=1)
-            rollout_speeds_normed = (rollout_speeds - np.min(rollout_speeds)) / (np.max(rollout_speeds) - np.min(rollout_speeds))
-            if np.any(np.isnan(rollout_speeds_normed)):
-                rollout_speeds_normed = rollout_speeds / np.max(rollout_speeds)
+            rollout_speeds_norm = np.linalg.norm(rollout_speeds)
+            if rollout_speeds_norm > 0:
+                rollout_speeds /= rollout_speeds_norm
             for t in range(rollout_traj.shape[0] - 1):
-                p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds_normed[t], 0.], lineWidth=5, replaceItemUniqueId=config.VIZ.rolloutTrajLineIds[t])
+                p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds[t], 0.], lineWidth=5, replaceItemUniqueId=config.VIZ.rolloutTrajLineIds[t])
     return config
 
 

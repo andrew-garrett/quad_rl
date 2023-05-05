@@ -11,7 +11,7 @@ import numpy as np
 
 
 NO_SPEED = 0.0 # m/s
-BASE_SPEED = 1.0 # m/s
+BASE_SPEED = 2.0 # 2.0 # m/s
 LOW_SPEED = 0.5*BASE_SPEED # m/s
 MED_SPEED = 1.0*BASE_SPEED # m/s
 HIGH_SPEED = 1.5*BASE_SPEED # m/s
@@ -170,29 +170,17 @@ AGGRESSIVE_TASK_BATTERY = {
 
 DEBUG_TASK_BATTERY = {
 
-    "straight_away": {
-        "taskcase_generator": "generate_straight_away_tasks",
-        "params": {
-            "num_drones": NUM_DRONES,
-            "ax": ["x", "y"],
-            "speed": [MED_SPEED, HIGH_SPEED]
-        }
-    },
     "figure_eight": {
         "taskcase_generator": "generate_figure_eight_tasks",
         "params": {
             "num_drones": NUM_DRONES,
             "ax": ["x"],
             "dh": [0.0],
-            "radii": [1.5, 3.0],
-            "rdp_threshold": [0.025, 0.1, 0.25],
+            "radii": [4.0],
+            "rdp_threshold": [0.025],
             "res": [0.25],
             "speed": [HIGH_SPEED],
-            "trajectory_generator": [
-                # "constant_speed",
-                # "cubic_spline", 
-                "min_snap"
-            ]
+            "trajectory_generator": ["min_snap"]
         }
     }
 }
@@ -203,34 +191,26 @@ DEBUG_TASK_BATTERY = {
 
 
 TEST_TASK_BATTERY = {
-    "racetrack": {
-        "taskcase_generator": "generate_racetrack_tasks",
+
+    "straight_away": {
+        "taskcase_generator": "generate_straight_away_tasks",
         "params": {
-            "num_drones": 1,
+            "num_drones": NUM_DRONES,
             "ax": ["x"],
-            "dh": [0.0, 3.0],
-            "radii": [2.0, 6.0],
-            "rdp_threshold": [0.025, 0.1, 0.25],
-            "res": [0.25, 0.5],
-            "speed": [HIGH_SPEED, AGGRO_MULTIPLIER*HIGH_SPEED],
-            "trajectory_generator": [
-                "min_snap"
-            ]
+            "speed": [HIGH_SPEED]
         }
     },
-    "avoid": {
-        "taskcase_generator": "generate_avoid_tasks",
+    "figure_eight": {
+        "taskcase_generator": "generate_figure_eight_tasks",
         "params": {
-            "num_drones": 1,
+            "num_drones": NUM_DRONES,
             "ax": ["x"],
             "dh": [0.0],
-            "radii": [1.0, 2.0],
-            "rdp_threshold": [0.025, 0.1, 0.25],
-            "res": [0.25, 0.5],
-            "speed": [MED_SPEED],
-            "trajectory_generator": [
-                "min_snap"
-            ]
+            "radii": [4.0],
+            "rdp_threshold": [0.025],
+            "res": [0.25],
+            "speed": [HIGH_SPEED],
+            "trajectory_generator": ["min_snap"]
         }
     }
 }

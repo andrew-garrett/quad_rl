@@ -1,5 +1,6 @@
 {
     "GUI" : false,
+    "LOG" : true,
     "RECORD" : true,
     "USER_DEBUG_GUI" : false
 }

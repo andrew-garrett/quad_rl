@@ -144,7 +144,7 @@ class MPPI:
     """
     Class to perform MPPI Algorithm
     """
-    def __init__(self, config) -> None:
+    def __init__(self, config, physics_model: str="dyn") -> None:
 
         # Set MPPI Parameters
         self.config = config
@@ -153,7 +153,7 @@ class MPPI:
         # Functional Dynamics Model
         try:
             f_config = self.config
-            self.F = getattr(dynamics_models, f_config.DYNAMICS_MODEL)(f_config)
+            self.F = getattr(dynamics_models, f_config.DYNAMICS_MODEL)(f_config, explicit=(physics_model == "dyn"))
         except:
             self.F = dynamics_models.DynamicsModel(f_config)
         
@@ -252,7 +252,7 @@ class MPPI:
             # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
             # Compute the cost of taking the perturbed optimal control (Discounted such that earlier timestep's error carry more weight)
-            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) # * (1.0 - t / (self.config.T)) # / self.config.DT
+            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1))
 
         # Terminal Cost
         # self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :])) # / self.config.DT
@@ -286,5 +286,5 @@ if __name__ == "__main__":
     xdes = np.zeros_like(x0, dtype=mppi_config.DTYPE)
     xdes[2] = 2.
 
-    next_control = mppi_node.command(x0, xdes)
-    print(next_control)
+    # next_control = mppi_node.command(x0, xdes)
+    # print(next_control)

@@ -47,8 +47,9 @@ There are three stages to the dynamics model:
 
 
 class DynamicsModel:
-    def __init__(self, config):
+    def __init__(self, config, explicit: bool=True):
         self.config = config
+        self.is_explicit = explicit
 
     def preprocess(self, state, u):
         """
@@ -93,7 +94,7 @@ class AnalyticalModel(DynamicsModel):
     """
     def __init__(self, config, explicit = True):
         super().__init__(config)
-        self.is_explicit = explicit 
+        self.is_explicit = explicit
 
     def motorModel(self, w_i):
         """Relate angular velocities [rpm] of motors to motor forces [N] and toqrues [N-m] via simplified motor model"""

@@ -1,10 +1,12 @@
 {
 	"AGGREGATE": true,
 	"COLAB": false,
+	"CONTROLLER": "mppi",
 	"CONTROL_FREQ_HZ": 48,
 	"DRONE_MODEL": "cf2x",
-	"GUI": false,
+	"GUI": true,
 	"H": 10.0,
+	"LOG": false,
 	"OBSTACLES": false,
 	"OFFSET": 1.0,
 	"PHYSICS": "dyn",
@@ -16,6 +18,6 @@
 		"sigma_r": 0.01,
 		"sigma_v": 0.01
 	},
-	"USER_DEBUG_GUI": false,
+	"USER_DEBUG_GUI": true,
 	"VISION": false
 }

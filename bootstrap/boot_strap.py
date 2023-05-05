@@ -97,7 +97,7 @@ if __name__ == "__main__":
     base_config_fpath = "./configs/tracking/tracking_config.json"
     with open(base_config_fpath, "r") as f:
         base_config = json.load(f)
-        ROOT = os.path.join("./bootstrap/datasets/", base_config["PHYSICS"])
+        ROOT = os.path.join(f"./bootstrap/datasets/{base_config['CONTROLLER']}/", base_config["PHYSICS"])
     # Get the visualization/data collection config specified by the CLI argument 
     config_fpath = f"./configs/tracking/{ARGS.tracking_config}_tracking_config.json"
     if "debug" in config_fpath:

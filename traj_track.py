@@ -108,15 +108,21 @@ def initialize_tracking(trajectory, config):
     PYB_CLIENT = env.getPyBulletClient()
 
     #### Initialize the logger #################################
-    logger = CustomLogger(
-        logging_freq_hz=int(config.SIMULATION_FREQ_HZ/config.AGGREGATE_PHY_STEPS),
-        num_drones=env.NUM_DRONES,
-        output_folder=config.OUTPUT_FOLDER,
-        colab=config.COLAB
-    )
+    if config.LOG:
+        logger = CustomLogger(
+            logging_freq_hz=int(config.SIMULATION_FREQ_HZ/config.AGGREGATE_PHY_STEPS),
+            num_drones=env.NUM_DRONES,
+            output_folder=config.OUTPUT_FOLDER,
+            colab=config.COLAB
+        )
+    else:
+        logger = None
 
     #### Initialize the controllers ############################
-    ctrl = [DSLPIDControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
+    if config.CONTROLLER.lower() in ("mppi", "hybrid"):
+        ctrl = [MPPIControl(drone_model=config.DRONE_MODEL, physics_model=config.PHYSICS.value) for k in range(env.NUM_DRONES)]
+    else:
+        ctrl = [DSLPIDControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
 
     return env, logger, ctrl, PYB_CLIENT
 
@@ -128,15 +134,15 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
     # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
     target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"]
-    target_rpy = env.INIT_RPYS + Rotation.from_euler("xyz", [0., 0., target_state["yaw"]]).as_euler("xyz")
+    target_rpy = env.INIT_RPYS + np.array([0., 0., target_state["yaw"]]) # Rotation.from_euler("xyz", [0., 0., target_state["yaw"]]).as_euler("xyz")
     target_rpy_rates = np.zeros_like(env.INIT_XYZS) + np.array([0., 0., target_state["yaw_dot"]])
 
     # If using MPPI control, collect the next_time_horizon of state trajectories
-    if "MPPIControl" in str(ctrl[0]):
+    if config.CONTROLLER.lower() in ("mppi", "hybrid"):
         ref_traj_arr, rollout_traj_arr = [], []
         for k in range(env.NUM_DRONES):
             ctrl[k].set_reference_trajectory(t, trajectory, env.INIT_XYZS[k], target_vel[k], target_rpy[k], target_rpy_rates[k])
-        # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
+            # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
             if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
                 ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
                 if ref_traj_k is not None:
@@ -175,9 +181,6 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
 
     #### Initialize the simulation #############################
     config = get_tracking_config(trajectory=trajectory, config_fpath=config_fpath)
-    
-    # Only log data when we are not visualizing trajectories
-    log_data = not config.GUI
     env, logger, ctrl, pyb_client = initialize_tracking(trajectory, config)
 
     if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI: #### Render Waypoints
@@ -185,29 +188,22 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
         render_markers(env, config, points=trajectory.points)
 
     #### Run the simulation ####################################
-    action = {str(k): np.array([env.HOVER_RPM, env.HOVER_RPM, env.HOVER_RPM, env.HOVER_RPM]) for k in range(env.NUM_DRONES)}
+    action = {str(k): env.HOVER_RPM*np.ones(4) for k in range(env.NUM_DRONES)}
     t_counter = 0
     t_start = time.time()
-    # t_swap < 0 means:  use baseline PID controller for entire trajectory
-    # t_swap = 0 means:  use other controller for the entire trajectory
-    # t_swap > 0 means:  use baseline PID controller until t_swap, then use other controller from t_swap onwards
-    t_swap = 0.0
     while t_counter < int(config.T_FINISH*env.SIM_FREQ):
         
         #### Step the simulation ###########################################################
         obs, reward, done, info = env.step(action)
 
         #### If we are using the explicit dynamics model, set the angular velocity in the state to be the rpy_rates
-        if env.PHYSICS.name == "DYN":
+        if env.PHYSICS.value == "dyn":
             rpy_rates = env.rpy_rates.copy()
             for k in range(env.NUM_DRONES):
                 obs[str(k)]["state"][13:16] = rpy_rates[k]
 
         #### Compute control at the desired frequency ######################################
         if t_counter%config.CONTROL_PERIOD_STEPS == 0:
-            if t_swap >= 0 and t_counter*env.TIMESTEP >= t_swap:
-                ctrl = [MPPIControl(drone_model=config.DRONE_MODEL) for k in range(env.NUM_DRONES)]
-                t_swap = -1
             target_state = trajectory.update(t_counter*env.TIMESTEP)
 
             config, target_pos, target_vel, target_rpy, target_rpy_rates, action, pos_error = get_control(t_counter*env.TIMESTEP, trajectory, env, ctrl, config, target_state, obs, action)
@@ -222,36 +218,37 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
             elif np.any(env.pos.copy()[:, 2] <= config.OFFSET):
                 break
         
-        if log_data:
-            if config.RECORD:
-                env.CAM_VIEW = p.computeViewMatrixFromYawPitchRoll(distance=2,
-                                                                   yaw=45,
-                                                                   pitch=-30,
-                                                                   roll=0,
-                                                                   cameraTargetPosition=obs[str(0)]["state"][:3],
-                                                                   upAxisIndex=2,
-                                                                   physicsClientId=pyb_client
-                                                                  )
+        if config.RECORD:
+            env.CAM_VIEW = p.computeViewMatrixFromYawPitchRoll(distance=2,
+                                                                yaw=45,
+                                                                pitch=-30,
+                                                                roll=0,
+                                                                cameraTargetPosition=obs[str(0)]["state"][:3],
+                                                                upAxisIndex=2,
+                                                                physicsClientId=pyb_client
+                                                                )
+        if config.LOG:
             for k in range(env.NUM_DRONES): #### Log the simulation
                 logger.log(
                     drone=k,
                     timestamp=t_counter/env.SIM_FREQ,
                     state=obs[str(k)]["state"],
-                    control=np.hstack([target_pos[k], target_rpy[k], target_vel[k], target_rpy_rates[k]])#,
-                    #flat_trajectory=np.hstack([target_pos[k], target_vel[k], target_state["x_ddot"], target_state["x_dddot"], target_state["x_ddddot"], target_state["yaw"], target_state["yaw_dot"]])
+                    control=np.hstack([target_pos[k], target_vel[k], target_rpy[k], target_rpy_rates[k]])
                 )
-            if verbose and t_counter%env.SIM_FREQ == 0: #### Printout
-                env.render()
-                if config.VISION: #### Print matrices with the images captured by each drone 
-                    for k in range(env.NUM_DRONES):
-                        print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
-                            obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
-                            obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
-                        )
+        
+        if verbose and t_counter%env.SIM_FREQ == 0: #### Printout
+            env.render()
+            if config.VISION: #### Print matrices with the images captured by each drone 
+                for k in range(env.NUM_DRONES):
+                    print(obs[str(k)]["rgb"].shape, np.average(obs[str(k)]["rgb"]),
+                        obs[str(k)]["dep"].shape, np.average(obs[str(k)]["dep"]),
+                        obs[str(k)]["seg"].shape, np.average(obs[str(k)]["seg"])
+                    )
 
         if config.GUI: #### Sync the simulation
             sync(t_counter, t_start, config.CONTROL_PERIOD_STEPS*env.TIMESTEP)
 
         t_counter += config.AGGREGATE_PHY_STEPS # Propragate physics
     env.close()   ##### Close the environments
-    logger.save() ##### Save the simulation results (npy and png plots)
+    if config.LOG:
+        logger.save() ##### Save the simulation results (npy and png plots)
