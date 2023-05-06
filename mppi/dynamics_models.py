@@ -2,14 +2,18 @@
 #################################################
 
 
+import os
+import json
+from copy import deepcopy
 try:
     import cupy as cp
 except:
     print("Cupy not found, defaulting back to np/torch.")
-from copy import deepcopy
 import numpy as np
-from scipy.spatial.transform import Rotation
 import torch
+from scipy.spatial.transform import Rotation
+
+from training.nn import DynamicsNet
 
 
 #################### FUNCTIONAL DYNAMICS MODEL ####################
@@ -79,8 +83,11 @@ class DynamicsModel:
         """
         Approximate next state given current state and control
         """
-        new_state = self.postprocess(self.step_dynamics(self.preprocess(state, u)))
-        return new_state
+        preproc = self.preprocess(state, u)
+        proc = self.step_dynamics(preproc)
+        postproc = self.postprocess(proc)
+        #new_state = self.postprocess(self.step_dynamics(self.preprocess(state, u)))
+        return postproc
 
 
 
@@ -92,9 +99,8 @@ class AnalyticalModel(DynamicsModel):
     Line numbers refer to BaseAviary Class
 
     """
-    def __init__(self, config, explicit = True):
-        super().__init__(config)
-        self.is_explicit = explicit
+    def __init__(self, config, explicit: bool=True):
+        super().__init__(config, explicit=explicit)
 
     def motorModel(self, w_i):
         """Relate angular velocities [rpm] of motors to motor forces [N] and toqrues [N-m] via simplified motor model"""
@@ -145,27 +151,26 @@ class AnalyticalModel(DynamicsModel):
             omega_dot = omega_dot.T
 
 
-        return state, accel, omega_dot
+        return state, d_R_w, accel, omega_dot
     
     def postprocess(self, output):
         """Given the current state, control input, and time interval, propogate the state kinematics"""
         #Decompose output and state
-        state, accel, omega_dot = output
+        state, d_R_w, accel, omega_dot = output
         xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
         dt = self.config.DT
         
         #Apply kinematic equations (same way it is done in dynamics)
         velo_dt = velo + accel * dt
-        xyz_dt = xyz + velo_dt * dt
+        xyz_dt = xyz + velo * dt
         
         #same for rotation 
-        #if self.is_explicit:
         rpy_rates_dt = rpy_rates + omega_dot * dt
-        # else:
-        #     d_R_w = Rotation.from_euler(('xyz'), rpy)
-        #     rpy_rates_dt = rpy_rates + (d_R_w.apply(omega_dot)) * dt
 
-        rpy_dt = rpy + rpy_rates_dt * dt
+        if self.is_explicit:
+            rpy_dt = rpy + rpy_rates * dt
+        else: 
+            rpy_dt = rpy + d_R_w.inv().apply(rpy_rates) * dt
 
         rpy_wrapped = deepcopy(rpy_dt)
         rpy_wrapped[:,[0,2]] = (rpy_wrapped[:,[0,2]] + np.pi) % (2 * np.pi) - np.pi
@@ -177,7 +182,7 @@ class AnalyticalModel(DynamicsModel):
     def accelerationLabels(self, state, u):
         """Helper function to compare with ground truth accelerations calculated using dv/dt
             Input the states, output the models acceleration predictions"""
-        _ , linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
+        _, _, linear_accel, angular_accel = self.step_dynamics(self.preprocess(state, u))
         return np.hstack((linear_accel, angular_accel))
 
 
@@ -187,32 +192,120 @@ class SampleLearnedModel(DynamicsModel):
     """
     Sample Class for 
     """
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, explicit: bool=True):
+        super().__init__(config, explicit=explicit)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.parse_config()
+
+        self.nn.eval()
+        self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"))
+        self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"))
+        self.state_min = torch.load(os.path.join(self.dataset_path, "train_state_min.pt"))
+        self.state_max = torch.load(os.path.join(self.dataset_path, "train_state_max.pt"))
+    
+    def parse_config(self):
+        self.dataset_path = os.path.join(self.config.NN_DATASET_ROOT, self.config.NN_DATASET_NAME, "torch_dataset")
+        self.nn_ckpt_path = self.config.NN_CKPT_PATH
+        self.training_config_path = self.config.NN_CONFIG_PATH
+        with open(self.training_config_path, "r") as f:
+            self.training_config = json.load(f)
+        checkpoint = torch.load(self.nn_ckpt_path, map_location=self.device)
+        self.nn = DynamicsNet(config=self.training_config)
+        new_state_dict = {}
+        for k in checkpoint["state_dict"].keys():
+            new_state_dict[k.replace("model.", "")] = checkpoint["state_dict"][k]
+        self.nn.load_state_dict(new_state_dict)
+        self.max_rpm = self.config.CF2X.MAX_RPM
+    
+    def normalize(self, val, minval, maxval):
+        norm = (val - minval)/(maxval - minval)
+        norm = norm*2 - 1
+        return norm
+    
+    def denormalize(self, val, minval, maxval):
+        denorm = (val + 1)/2
+        denorm = (denorm*(maxval - minval)) + minval
+        return denorm
 
     def preprocess(self, state, u):
         """
         Preprocess state and control for network input
         (normalize inputs, preprocess angles w/ sin and cos etc)
         """
-        return 0 #preprocessed
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+
+        ##### Attempt at getting model trained on explicit dynamics to work for pyb_data
+        if not self.is_explicit:
+            # Coordinate transformation from drone frame to world frame, can use orientation
+            d_R_w = Rotation.from_euler(('xyz'), rpy)
+            rpy_rates = d_R_w.inv().apply(rpy_rates)
+        else:
+            d_R_w = None
+
+        ## DIVIDE U BY MAX RPM
+        u /= self.max_rpm
+
+        nn_input = np.concatenate([np.sin(rpy), np.cos(rpy), velo, rpy_rates, u], axis=1)
+        nn_input = torch.tensor(nn_input)
+        nn_input_normalized = self.normalize(nn_input, self.state_min, self.state_max)
+        #breakpoint()
+        return state, d_R_w, nn_input_normalized
 
     def step_dynamics(self, input):
         """
         Compute Accelerations OR Delta State using trained Weights/Biases of Network
         (Carry out forward pass of network)
         """
-        acc = np.zeros((self.config.K, 6))
-        return acc
+        state, d_R_w, nn_input = input
+        with torch.no_grad():
+            nn_output = self.nn(nn_input.float(), None)
+        return state, d_R_w, nn_output
 
     def postprocess(self, output):
-        """
-        Postprocess network outputs to obtain the resulting state in the state-space
-        If acceleration, apply kinematics, if delta state, add to input state
-        """
-        new_state = np.random.standard_normal(size=(self.config.K, self.config.X_SPACE))
-        return new_state
+        """Given the current state, control input, and time interval, propogate the state kinematics"""
+        #Decompose output and state
+        state, d_R_w, nn_output = output
+        nn_output_denormalized = self.denormalize(nn_output, self.nn_gt_min, self.nn_gt_max).numpy()
+        accel, omega_dot = (nn_output_denormalized[:,:3], nn_output_denormalized[:,3:])
+
+        if not self.is_explicit:
+            omega_dot = d_R_w.apply(omega_dot)
+        else:
+            omega_dot = omega_dot
+
+        xyz, velo, rpy, rpy_rates = state[:, :3], state[:, 3:6], state[:, 6:9], state[:, 9:]
+        dt = self.config.DT
+        
+        #Apply kinematic equations (same way it is done in dynamics)
+        velo_dt = velo + accel * dt
+        xyz_dt = xyz + velo * dt
+
+        if self.is_explicit:
+            rpy_rates_dt = rpy_rates + omega_dot * dt
+            rpy_dt = rpy + rpy_rates * dt
+        else:
+            rpy_rates_dt = rpy_rates + omega_dot * dt
+            rpy_dt = rpy + d_R_w.inv().apply(rpy_rates) * dt
+
+        # wrap rpy_dt
+        rpy_wrapped = deepcopy(rpy_dt)
+        rpy_wrapped[0,[0,2]] = (rpy_wrapped[0,[0,2]] + np.pi) % (2 * np.pi) - np.pi
+        rpy_wrapped[0,1] = (rpy_wrapped[0,1] + np.pi/2) % (np.pi) - np.pi/2
+        
+        #format in shape of state and return 
+        return np.hstack((xyz_dt, velo_dt, rpy_wrapped, rpy_rates_dt))
     
+    def accelerationLabels(self, state, u):
+        """Helper function to compare with ground truth accelerations calculated using dv/dt
+            Input the states, output the models acceleration predictions"""
+        _, d_R_w, nn_output = self.step_dynamics(self.preprocess(state, u))
+        nn_output_denormalized = self.denormalize(nn_output, self.nn_gt_min, self.nn_gt_max).numpy()
+        linear_accel, angular_accel = (nn_output_denormalized[:,:3], nn_output_denormalized[:,3:])
+        if not self.is_explicit:
+            angular_accel = d_R_w.apply(angular_accel)
+        else:
+            angular_accel = angular_accel
+        return np.hstack((linear_accel, angular_accel))
 
 
 class TorchAnalyticalModel(AnalyticalModel):

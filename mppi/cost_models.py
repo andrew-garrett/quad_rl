@@ -89,8 +89,8 @@ class CostModel:
         COST = GAMMA * ((u_tm1 - NOMINAL_U) @ SYSTEM_NOISE @ dU))
         """
         u_tm1, du = u
-        u_tm1 = u_tm1 / self.config.CF2X.MAX_RPM
-        du = du / self.config.CF2X.MAX_RPM
+        # u_tm1 = u_tm1 / self.config.CF2X.MAX_RPM
+        # du = du / self.config.CF2X.MAX_RPM
         # du = self.METHOD.abs(du) # This is optional?? favors noisier actions
         self.U_SHAPE_ARR = self.METHOD.broadcast_to(u_tm1, self.U_SHAPE_ARR.shape)
         control_cost = self.METHOD.einsum("ij,kj,ik->i", self.U_SHAPE_ARR, self.SYSTEM_NOISE_INV, du)
@@ -101,7 +101,7 @@ class CostModel:
         state = (current_state, desired_state)
         u = (u_tm1, du_tm1)
         """
-        return self.compute_state_cost(state) + self.compute_control_cost(u)
+        return self.compute_state_cost(state) # + self.compute_control_cost(u)
     
 
     

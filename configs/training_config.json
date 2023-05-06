@@ -1,6 +1,6 @@
 {
     "dataset": {
-        "root": "./bootstrap/datasets/",
+        "root": "./bootstrap/datasets/training/dyn/",
         "name": "AGGRO_000",
         "num_drones": 27
     },
@@ -8,7 +8,7 @@
         "state_dim": 16,
         "control_dim": 0,
         "accel_dim": 6,
-        "hidden_layers": [32, 32],
+        "hidden_layers": [64, 64],
         "activation": "tanh",
         "dropout": 0.0
     },

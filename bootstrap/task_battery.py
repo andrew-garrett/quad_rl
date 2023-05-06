@@ -197,7 +197,7 @@ TEST_TASK_BATTERY = {
         "params": {
             "num_drones": NUM_DRONES,
             "ax": ["x"],
-            "speed": [HIGH_SPEED]
+            "speed": [MED_SPEED]
         }
     },
     "figure_eight": {
@@ -228,9 +228,7 @@ class TaskBattery(Enum):
 
     DEBUG = DEBUG_TASK_BATTERY
 
-    # FULL = FULL_TASK_BATTERY
-
-    # TEST = TEST_TASK_BATTERY
+    TEST = TEST_TASK_BATTERY
 
 DEFAULT_TASK_BATTERY = TaskBattery.DEBUG
 DEFAULT_DATASET_NAME = f"{DEFAULT_TASK_BATTERY.name}_000"

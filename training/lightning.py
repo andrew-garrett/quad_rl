@@ -32,6 +32,12 @@ class DynamicsLightningModule(pl.LightningModule):
             "val": [],
             "test": []
         }
+        self.nn_gt_min = torch.load(os.path.join(self.dataset_path, "train_nn_gt_min.pt"), map_location="cuda")
+        self.nn_gt_max = torch.load(os.path.join(self.dataset_path, "train_nn_gt_max.pt"), map_location="cuda")
+        self.nn_gt_range = self.nn_gt_max - self.nn_gt_min
+        self.accel_labels = [
+            "x", "y", "z", "roll", "pitch", "yaw"
+        ]
     
     def parse_config(self):
         self.batch_size = self.config["training"]["batch_size"]
@@ -41,6 +47,8 @@ class DynamicsLightningModule(pl.LightningModule):
         self.optimizer_name = self.config["training"]["optimizer"]
         self.loss_name = self.config["training"]["loss_fn"]
         self.use_scheduler = self.config["training"]["scheduler"]
+        self.dataset_path = os.path.join(self.config["dataset"]["root"], self.config["dataset"]["name"], "torch_dataset")
+        self.output_size = self.config["model"]["accel_dim"]
     
     def configure_optimizers(self):
         optimizer = optimizers[self.optimizer_name](self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -59,13 +67,22 @@ class DynamicsLightningModule(pl.LightningModule):
         state, action, acceleration = batch
         pred_accel = self.model(state.float(), action.float())
         loss = self.loss_fn(pred_accel, acceleration.float())
+        pred_denorm, truth_denorm = (self.denormalize_accel(pred_accel.detach()), self.denormalize_accel(acceleration.detach()))
+        errors = torch.abs(pred_denorm - truth_denorm)
         output_dict = {
             "loss": loss
         }
+        for i in range(self.output_size):
+            output_dict[f"error_{self.accel_labels[i]}"] = errors[:,i]
         if stage == "train":
             self.log_metric(f"{stage}/loss", loss)
         self.step_outputs[stage].append(output_dict)
         return output_dict
+
+    def denormalize_accel(self, accel):
+        denormalized = (accel + 1)/2
+        denormalized = (denormalized * (self.nn_gt_max - self.nn_gt_min)) + self.nn_gt_min
+        return denormalized
     
     def training_step(self, batch, _):
         return self.step(batch, "train")
@@ -80,6 +97,20 @@ class DynamicsLightningModule(pl.LightningModule):
         outputs = self.step_outputs[stage]
         loss = torch.stack([x["loss"] for x in outputs]).mean()
         self.log_metric(f"{stage}/loss_epoch", loss)
+        error_xyz = []
+        error_rpy = []
+        for i in range(self.output_size):
+            error_i = torch.cat([x[f"error_{self.accel_labels[i]}"] for x in outputs]).mean()
+            norm_error_i = torch.cat([x[f"error_{self.accel_labels[i]}"] for x in outputs]) / self.nn_gt_range[i]
+            norm_error_i = norm_error_i.mean()
+            self.log_metric(f"{stage}/error_{self.accel_labels[i]}_epoch", error_i)
+            self.log_metric(f"{stage}/norm_error_{self.accel_labels[i]}_epoch", norm_error_i)
+            if i < 3:
+                error_xyz.append(error_i)
+            else:
+                error_rpy.append(error_i)
+        self.log_metric(f"{stage}/error_xyz_epoch", sum(error_xyz)/3)
+        self.log_metric(f"{stage}/error_rpy_epoch", sum(error_rpy)/3)
         self.step_outputs[stage] = []
     
     def on_train_epoch_end(self):

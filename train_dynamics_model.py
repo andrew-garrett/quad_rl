@@ -30,7 +30,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "--root",
-        default="./bootstrap/datasets/",
+        default="./bootstrap/datasets/testing/dyn/",
         help="root where datasets are stored",
         type=str
     )
@@ -42,13 +42,13 @@ def parse_args():
     )
     parser.add_argument(
         "--config",
-        default="training_config.json",
+        default="configs/training_config.json",
         help="path_to_config_file",
         type=str
     )
     parser.add_argument(
         "--epochs",
-        default=10,
+        default=50,
         help="Number of training epochs",
         type=int
     )
@@ -88,7 +88,7 @@ def build_trainer_module(config, experiment_dir, epochs):
     )
     try:
         trainer = pl.Trainer(
-            devices=-1,
+            devices=1,
             accelerator="gpu",
             max_epochs=epochs,
             log_every_n_steps=50,

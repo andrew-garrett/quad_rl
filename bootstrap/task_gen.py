@@ -5,6 +5,7 @@
 import os
 import json
 import csv
+from copy import deepcopy
 import numpy as np
 
 from bootstrap.task_battery import DEFAULT_ROOT, DEFAULT_DATASET_NAME, DEFAULT_TASK_BATTERY, DEFAULT_T
@@ -307,14 +308,14 @@ class Tasks:
         os.makedirs(os.path.join(dataset_fpath, "waypoints"))
 
         # Iterate through the tasking battery and generate waypoint files
-        battery = task_battery.value
+        battery = deepcopy(task_battery.value)
         for key, value in battery.items():
             # generate task by calling relevant function
             getattr(Tasks, value["taskcase_generator"])(value["params"], root, dataset_name)
             battery[key] = value["params"]
         
         # Save the dataset parameters
-        with open(os.path.join(dataset_fpath, f"{dataset_name}_TASK_CONFIG.json"), "w") as f: ############################ CHANGE MADE
+        with open(os.path.join(dataset_fpath, f"{dataset_name}_TASK_CONFIG.json"), "w") as f:
             json.dump(battery, f, indent="\t")
         
         return dataset_name

@@ -1,5 +1,6 @@
+from copy import deepcopy
 from mppi.MPPINode import get_mppi_config
-from mppi.dynamics_models import AnalyticalModel
+from mppi.dynamics_models import AnalyticalModel, SampleLearnedModel
 from matplotlib import pyplot as plt
 
 import numpy as np
@@ -10,6 +11,7 @@ class TestDynamics():
     def __init__(self, model, test_states, title):
         #Dynamics model object, to be tested
         self.model = model
+        # self.model2 = model2
         #Data from a single drone
         self.data = test_states
         _ , self.n = np.shape(test_states)
@@ -24,9 +26,9 @@ class TestDynamics():
         self.s_pred = np.zeros((12, self.n-1))
         #Simulate model for each time step
         for i in range(1, self.n):
-            s_in = self.data[:12, i-1] #previous state 
-            u_in = self.data[12:, i] #control action taken 
-            s_out = self.data[:12, i]
+            s_in = deepcopy(self.data[:12, i-1]) #previous state 
+            u_in = deepcopy(self.data[12:, i]) #control action taken 
+            s_out = deepcopy(self.data[:12, i])
             #Call model to get prediction
             self.s_pred[:, i-1] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1)).flatten()
 
@@ -43,11 +45,11 @@ class TestDynamics():
                 print("---------")
 
     def trajPrediction(self, rollout = True):
-        """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUDNING ERROR"""
+        """COMPARE ROLLOUT OF TRAJECTORIES TO LOOK FOR COMPOUNDING ERROR"""
         self.rollout = np.zeros((12, self.n))
 
         self.rolled_accelerations = np.zeros((6, self.n-1))
-        self.rollout[:, 0] = self.data[:12, 0]
+        self.rollout[:, 0] = deepcopy(self.data[:12, 0])
         #rollout trajectory
         for i in range(1, self.n):
             if rollout:
@@ -56,8 +58,8 @@ class TestDynamics():
                 s_in = self.data[:12, i-1]
 
             u_in = self.data[12:, i] #requested control
-            self.rollout[:, i] = self.model(s_in.reshape(1, -1), u_in.reshape(1, -1))
-            self.rolled_accelerations[:, i-1] = self.model.accelerationLabels(s_in.reshape(1, -1), u_in.reshape(1, -1))
+            self.rollout[:, i] = self.model(deepcopy(s_in).reshape(1, -1), deepcopy(u_in).reshape(1, -1))
+            self.rolled_accelerations[:, i-1] = self.model.accelerationLabels(deepcopy(s_in).reshape(1, -1), deepcopy(u_in).reshape(1, -1))
 
 
     def compareTraj(self):
@@ -223,21 +225,69 @@ config = get_mppi_config()
 testAnalytical = AnalyticalModel(config) 
 #flight_file = "./bootstrap/datasets/dyn/AGGRO_000/sim_data/save-flight-04.19.2023_21.30.37.npy"
 flight_file = "PYBD2.npy"
+#flight_file = "test_data_dyn2.npy"
+
+
+flight_file = "C:/Users/andre/skool/quad_rl/bootstrap/datasets/mppi/dyn/DEBUG_000/sim_data/save-flight-05.05.2023_05.01.58.npy"
+flight_file = "C:/Users/andre/skool/quad_rl/bootstrap/datasets/mppi/pyb/DEBUG_000/sim_data/save-flight-05.05.2023_05.06.19.npy"
 test_data = np.load(flight_file)
 test_state = test_data['states'][0]
 
-"""TEST FOR PYB DATA (EXPLICIT = FALSE)"""
-testAnalyticalPYB = AnalyticalModel(config, explicit=False) 
-AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state, "Analytical Model PYB")
-AnalyticalTester.runModelStep(printout=False)
-# AnalyticalTester.linear_absolute_error()
-# AnalyticalTester.rotational_absolute_error()
+"""ANALYTICAL TEST FOR DYN DATA (EXPLICIT = TRUE)"""
 
-AnalyticalTester.trajPrediction() #WITH ROLLOUT 
-#AnalyticalTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
-AnalyticalTester.compareTraj()
-AnalyticalTester.compare_accels()
+# testAnalyticalDYN = AnalyticalModel(config, explicit=True)
+# AnalyticalTester = TestDynamics(testAnalyticalDYN, test_state[:, :], "Analytical Model DYN")
+# AnalyticalTester.runModelStep(printout=False)
 
+# # AnalyticalTester.linear_absolute_error()
+# # AnalyticalTester.rotational_absolute_error()
+
+# AnalyticalTester.trajPrediction() #WITH ROLLOUT 
+# # AnalyticalTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
+# AnalyticalTester.compareTraj()
+# AnalyticalTester.compare_accels()
+
+"""ANALYTICAL TEST FOR PYB DATA (EXPLICIT = FALSE)"""
+
+# testAnalyticalPYB = AnalyticalModel(config, explicit=False)
+# AnalyticalTester = TestDynamics(testAnalyticalPYB, test_state[:, :], "Analytical Model PYB")
+# AnalyticalTester.runModelStep(printout=False)
+
+# # AnalyticalTester.linear_absolute_error()
+# # AnalyticalTester.rotational_absolute_error()
+
+# # AnalyticalTester.trajPrediction() #WITH ROLLOUT 
+# AnalyticalTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
+# AnalyticalTester.compareTraj()
+# AnalyticalTester.compare_accels()
+
+"""NEURAL TEST FOR PYB DATA (EXPLICIT = TRUE)"""
+
+# testNeuralDYN = SampleLearnedModel(config, explicit=True)
+# NeuralTester = TestDynamics(testNeuralDYN, test_state[:, :], "Neural Model DYN")
+# NeuralTester.runModelStep(printout=False)
+
+# # NeuralTester.linear_absolute_error()
+# # NeuralTester.rotational_absolute_error()
+
+# # NeuralTester.trajPrediction() #WITH ROLLOUT 
+# NeuralTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
+# NeuralTester.compareTraj()
+# NeuralTester.compare_accels()
+
+"""NEURAL TEST FOR PYB DATA (EXPLICIT = FALSE)"""
+
+# testNeuralPYB = SampleLearnedModel(config, explicit=False)
+# NeuralTester = TestDynamics(testNeuralPYB, test_state[:, :], "Neural Model PYB")
+# NeuralTester.runModelStep(printout=False)
+
+# # NeuralTester.linear_absolute_error()
+# # NeuralTester.rotational_absolute_error()
+
+# # NeuralTester.trajPrediction() #WITH ROLLOUT 
+# NeuralTester.trajPrediction(rollout = False) #WITHOUT ROLLOUT
+# NeuralTester.compareTraj()
+# NeuralTester.compare_accels()
 
 print("end")
 

@@ -83,23 +83,14 @@ def collect_bootstrap_data(
     return
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bootstrap Simulation Dataset Collection Script",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    t_battery_choices = [TASK_BATTERY.name for _, TASK_BATTERY in enumerate(TaskBattery)]
-    t_battery_choices.append("FULL")
-    parser.add_argument("--task-battery", default="DEBUG", type=str, help="task_battery.TaskBattery", choices=t_battery_choices)
-    tracking_options = ["_".join(t_config_fpath.split("/")[-1].split("_")[:-2]) for t_config_fpath in CONFIG_FPATHS]
-    parser.add_argument("--tracking-config", default="default", type=str, help="controls what kind of visualization and whether or not we collect data", choices=tracking_options)
-    ARGS = parser.parse_args()
-
+def run_data_collection(task_battery, tracking_config):
     ##### Get the main/base tracking_config.json and update relevant values from the argument 
     base_config_fpath = "./configs/tracking/tracking_config.json"
     with open(base_config_fpath, "r") as f:
         base_config = json.load(f)
         ROOT = os.path.join(f"./bootstrap/datasets/{base_config['CONTROLLER']}/", base_config["PHYSICS"])
     # Get the visualization/data collection config specified by the CLI argument 
-    config_fpath = f"./configs/tracking/{ARGS.tracking_config}_tracking_config.json"
+    config_fpath = f"./configs/tracking/{tracking_config}_tracking_config.json"
     if "debug" in config_fpath:
         VERBOSE = True
     with open(config_fpath, "r") as f:
@@ -111,9 +102,9 @@ if __name__ == "__main__":
         json.dump(base_config, f, indent="\t", sort_keys=True)
 
     ##### Choose the task battery to run simulations on
-    if ARGS.task_battery != "FULL":
+    if task_battery != "FULL":
         for _, t_battery in enumerate(TaskBattery):
-            if t_battery.name == ARGS.task_battery:
+            if t_battery.name == task_battery:
                 collect_bootstrap_data(ROOT, t_battery)
     else:
         # If we are performing multithreaded dataset collection, revert to the most lightweight tracking config
@@ -135,3 +126,15 @@ if __name__ == "__main__":
         
         for thread in threads:
             thread.join()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Bootstrap Simulation Dataset Collection Script",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    t_battery_choices = [TASK_BATTERY.name for _, TASK_BATTERY in enumerate(TaskBattery)]
+    t_battery_choices.append("FULL")
+    parser.add_argument("--task-battery", default="DEBUG", type=str, help="task_battery.TaskBattery", choices=t_battery_choices)
+    tracking_options = ["_".join(t_config_fpath.split("/")[-1].split("_")[:-2]) for t_config_fpath in CONFIG_FPATHS]
+    parser.add_argument("--tracking-config", default="default", type=str, help="controls what kind of visualization and whether or not we collect data", choices=tracking_options)
+    ARGS = parser.parse_args()
+
+    run_data_collection(ARGS.task_battery, ARGS.tracking_config)

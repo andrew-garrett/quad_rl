@@ -117,6 +117,9 @@ class MPPIControl(DSLPIDControl):
 
         ##### Get next control input
         rpm = self.mppi_node.command(cur_state, True)
+        ##### Get the expected next state
+        self.optimal_rollout_next_state = self.mppi_node.F(cur_state.reshape(1, -1), deepcopy(rpm).reshape(1, -1)).flatten()
+
         self.control_counter += 1
         pos_e = target_pos - cur_pos
         vel_e = target_vel - cur_vel

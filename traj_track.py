@@ -143,14 +143,14 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
         for k in range(env.NUM_DRONES):
             ctrl[k].set_reference_trajectory(t, trajectory, env.INIT_XYZS[k], target_vel[k], target_rpy[k], target_rpy_rates[k])
             # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
-            if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
-                ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
-                if ref_traj_k is not None:
-                    ref_traj_arr.append(ref_traj_k)
-                if rollout_traj_k is not None:
-                    rollout_traj_arr.append(rollout_traj_k)
-        if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
-            config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
+        #     if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+        #         ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
+        #         if ref_traj_k is not None:
+        #             ref_traj_arr.append(ref_traj_k)
+        #         if rollout_traj_k is not None:
+        #             rollout_traj_arr.append(rollout_traj_k)
+        # if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+        #     config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
 
     # # Apply noise to the targets
     # pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
@@ -219,22 +219,30 @@ def track(trajectory, config_fpath="./configs/tracking/tracking_config.json", ve
                 break
         
         if config.RECORD:
+            #### If we're recording, don't make videos that are too long
+            if t_counter*env.TIMESTEP > 12.0:
+                break
+            #### Track the main drone with the camera
             env.CAM_VIEW = p.computeViewMatrixFromYawPitchRoll(distance=2,
                                                                 yaw=45,
                                                                 pitch=-30,
                                                                 roll=0,
-                                                                cameraTargetPosition=obs[str(0)]["state"][:3],
+                                                                cameraTargetPosition=obs["0"]["state"][:3],
                                                                 upAxisIndex=2,
                                                                 physicsClientId=pyb_client
                                                                 )
         if config.LOG:
-            for k in range(env.NUM_DRONES): #### Log the simulation
-                logger.log(
-                    drone=k,
-                    timestamp=t_counter/env.SIM_FREQ,
-                    state=obs[str(k)]["state"],
-                    control=np.hstack([target_pos[k], target_vel[k], target_rpy[k], target_rpy_rates[k]])
-                )
+            try:
+                for k in range(env.NUM_DRONES): #### Log the simulation
+                    logger.log(
+                        drone=k,
+                        timestamp=t_counter/env.SIM_FREQ,
+                        state=obs[str(k)]["state"],
+                        control=np.hstack([target_pos[k], target_vel[k], target_rpy[k], target_rpy_rates[k]]),
+                        optimal_trajectory=ctrl[k].optimal_rollout_next_state if hasattr(ctrl[k], "optimal_rollout_next_state") else np.hstack([target_pos[k], target_vel[k], target_rpy[k], target_rpy_rates[k]])
+                    )
+            except Exception as e:
+                print(e)
         
         if verbose and t_counter%env.SIM_FREQ == 0: #### Printout
             env.render()

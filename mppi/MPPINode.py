@@ -3,18 +3,12 @@
 
 
 import os
-import sys
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 import json
 from collections import namedtuple
 import xml.etree.ElementTree as etxml
 try:
     import cupy as cp
-    """
-        To migrate to cupy over numpy, we need the following commands from cupy:
-            np.array() <-> cp.array()
-            np.sum(x, axis, dtype) <-> cp.sum(x, axis, dtype)
-    """
 except:
     print("cupy not available, defaulting to np/torch")
 import numpy as np
@@ -48,6 +42,7 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     # Set derived/processed parameters
     config_dict["DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
     config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
+    config_dict["SIMULATION_T"] = int(config_dict["SIMULATION_T_HORIZON"] * config_dict["FREQUENCY"])
     config_dict["METHOD"] = config_dict["METHOD"].lower()
     if config_dict["METHOD"] in ("torch", "cupy"):
         config_dict["DYNAMICS_MODEL"] = config_dict["METHOD"].capitalize() + config_dict["DYNAMICS_MODEL"]
@@ -80,6 +75,7 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     config_dict["SYSTEM_BIAS"] = config_dict["SYSTEM_BIAS"] * np.ones(config_dict["U_SPACE"])
     config_dict["SYSTEM_NOISE"] = config_dict["SYSTEM_NOISE"] * np.eye(config_dict["U_SPACE"])
     config_dict["DT"] = 1.0/config_dict["FREQUENCY"]
+    config_dict["DISCOUNT"] = 1.0 - config_dict["DT"]
 
     config = namedtuple("mppi_config", config_dict.keys())(**config_dict)
     return config
@@ -154,8 +150,10 @@ class MPPI:
         try:
             f_config = self.config
             self.F = getattr(dynamics_models, f_config.DYNAMICS_MODEL)(f_config, explicit=(physics_model == "dyn"))
+            self.analytical_model = getattr(dynamics_models, "AnalyticalModel")(f_config, explicit=(physics_model == "dyn"))
         except:
-            self.F = dynamics_models.DynamicsModel(f_config)
+            breakpoint()
+            self.F = getattr(dynamics_models, "AnalyticalModel")(f_config, explicit=(physics_model == "dyn"))
         
         # Functional Cost Model
         try:
@@ -252,7 +250,7 @@ class MPPI:
             # Approximate the next state for the perturbed current control
             self.SAMPLES_X[t] = self.F(self.SAMPLES_X[t-1], v_tm1)
             # Compute the cost of taking the perturbed optimal control (Discounted such that earlier timestep's error carry more weight)
-            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1))
+            self.COST_MAP += self.S((self.SAMPLES_X[t], self.traj_des[t-1]), (u_tm1, du_tm1)) # * (1.0 - t / (self.config.T)) # / self.config.DT
 
         # Terminal Cost
         # self.COST_MAP += self.S((self.SAMPLES_X[-1], self.traj_des[-1]), (self.U[-1], du[:, -1, :])) # / self.config.DT

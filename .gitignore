@@ -11,4 +11,4 @@ wandb/
 lightning_logs/
 
 
-DEPRECATED/
+models/

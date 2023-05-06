@@ -340,11 +340,13 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         # Generate global minimum-snap trajectory
         self.minimize_snap()
 
-        # Generate minimum-accel yaw trajectory
-        self.minimize_yaw()
-
-        # Debug (visualization)
-        # self.simulate_trajectory()
+        # try:
+        #     # Generate minimum-accel yaw trajectory
+        #     self.minimize_yaw()
+        #     # Debug (visualization)
+        #     # self.simulate_trajectory()
+        # except Exception as e:
+        #     print(e)
 
     def minimize_snap(self):
         """
@@ -442,10 +444,17 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
             vel, accel = flat_output["x_dot"], flat_output["x_ddot"]
             ##### Compute Unit Tangent, Unit Normal, and Unit Binormal Vectors
             speed = np.linalg.norm(vel)
-            unit_tangent = vel / speed
+            if speed > 0:
+                unit_tangent = vel / speed
+            else:
+                unit_tangent = vel
             tan_accel = np.dot(unit_tangent, accel)
             normal_accel = accel - tan_accel * unit_tangent
-            unit_normal = normal_accel / np.linalg.norm(normal_accel)
+            normal_accel_mag = np.linalg.norm(normal_accel)
+            if normal_accel_mag > 0:
+                unit_normal = normal_accel / normal_accel_mag
+            else:
+                unit_normal = normal_accel
             unit_binormal = np.cross(unit_tangent, unit_normal)
             ##### Construct rotation matrix from unit vectors, store the euler angles with 0 roll, 0 pitch
             rot = Rotation.from_matrix(np.vstack((unit_tangent, unit_normal, unit_binormal)).T)
@@ -582,7 +591,10 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
         if t+0.25 >= self.t_finish:
             x = self.points[-1]
             x_dot, x_ddot, x_dddot, x_ddddot = (np.zeros(3) for i in range(4))
-            yaw, yaw_dot = self.rot_points_obj.as_euler("xyz", degrees=False)[-1, -1], 0.
+            try:
+                yaw, yaw_dot = self.rot_points_obj.as_euler("xyz", degrees=False)[-1, -1], 0.
+            except:
+                yaw, yaw_dot = 0., 0.
             self.is_done = True
         else:
             t_s = float(t - self.t_start_vec[last_tstart_ind])

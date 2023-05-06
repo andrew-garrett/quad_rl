@@ -37,7 +37,7 @@ def cleanup(root, dataset_name, config_fpath="./configs/tracking/tracking_config
     shutil.copy(config_fpath, data_root)
     os.rename(os.path.join(data_root, "tracking_config.json"), os.path.join(data_root, f"{dataset_name}_TRACKING_CONFIG.json"))
     with open(os.path.join(data_root, f"{dataset_name}_TRACKING_CONFIG.json"), "r") as f:
-        video_fps = json.load(f)["CONTROL_FREQ_HZ"]
+        video_fps = json.load(f)["CONTROL_FREQ_HZ"] // 2
     ##### Walk the dataset directory and zip it's contents
     with ZipFile(f"{data_root}.zip", "w") as zip_object:
         for folder, sub_folders, f_names in os.walk(data_root):
@@ -50,7 +50,7 @@ def cleanup(root, dataset_name, config_fpath="./configs/tracking/tracking_config
                     ##### If we have pngs saved, create videos with ffmpeg
                     if not os.path.exists(video_output_folder): 
                         os.makedirs(video_output_folder, exist_ok=True)
-                    command = f"ffmpeg -y -framerate {video_fps} -s 1920x1080 -i {os.path.join(folder, 'frame_%d.png')} -c:v libx264 -pix_fmt yuv420p {os.path.join(video_output_folder, str(os.path.basename(folder)).replace('.', '-') + '.mp4')}".split(" ")
+                    command = f"ffmpeg -y -framerate {video_fps} -s 960x540 -i {os.path.join(folder, 'frame_%d.png')} -c:v libx264 -pix_fmt yuv420p {os.path.join(video_output_folder, str(os.path.basename(folder)).replace('.', '-') + '.mp4')}".split(" ")
                     if subprocess.run(command).returncode == 0:
                         print ("FFmpeg Script Ran Successfully")
                     else:
@@ -265,14 +265,14 @@ def render_rollouts(config, ref_traj_arr, rollout_traj_arr):
             if ref_speeds_norm > 0:
                 ref_speeds /= ref_speeds_norm
             for t in range(ref_traj.shape[0] - 1):
-                p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., 1.0 - ref_speeds[t]], lineWidth=5, replaceItemUniqueId=config.VIZ.refTrajLineIds[t])
+                p.addUserDebugLine(ref_traj[t, :3], ref_traj[t+1, :3], [0., 0., ref_speeds[t]], lineWidth=5, replaceItemUniqueId=config.VIZ.refTrajLineIds[t])
         for rollout_traj in rollout_traj_arr:
             rollout_speeds = np.linalg.norm(rollout_traj[:, 3:6], axis=1)
             rollout_speeds_norm = np.linalg.norm(rollout_speeds)
             if rollout_speeds_norm > 0:
                 rollout_speeds /= rollout_speeds_norm
             for t in range(rollout_traj.shape[0] - 1):
-                p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., 1.0 - rollout_speeds[t], 0.], lineWidth=5, replaceItemUniqueId=config.VIZ.rolloutTrajLineIds[t])
+                p.addUserDebugLine(rollout_traj[t, :3], rollout_traj[t+1, :3], [0., rollout_speeds[t], 0.], lineWidth=5, replaceItemUniqueId=config.VIZ.rolloutTrajLineIds[t])
     return config
 
 
