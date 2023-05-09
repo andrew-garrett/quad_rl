@@ -9,7 +9,7 @@ from copy import deepcopy
 import numpy as np
 
 from bootstrap.task_battery import DEFAULT_ROOT, DEFAULT_DATASET_NAME, DEFAULT_TASK_BATTERY, DEFAULT_T
-from bootstrap.utils import get_task_param_grid
+from utils import get_task_param_grid
 
 
 #################### GENERATE WAYPOINTS FOR TASK BATTERY ####################

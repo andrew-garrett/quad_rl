@@ -9,12 +9,12 @@ from copy import deepcopy
 import numpy as np
 import pybullet as p
 
-from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
+from gym_pybullet_drones.control.DSLPIDControl import BaseControl
 from gym_pybullet_drones.utils.enums import DroneModel
 
 from mppi.MPPINode import get_mppi_config, MPPI
 
-class MPPIControl(DSLPIDControl):
+class MPPIControl(BaseControl):
     """
     MPPI control class for Crazyflies.
     """
@@ -122,9 +122,9 @@ class MPPIControl(DSLPIDControl):
 
         self.control_counter += 1
         pos_e = target_pos - cur_pos
-        vel_e = target_vel - cur_vel
+        # vel_e = target_vel - cur_vel
         euler_e = target_rpy - cur_rpy
-        ang_vel_e = target_rpy_rates - cur_ang_vel
+        # ang_vel_e = target_rpy_rates - cur_ang_vel
 
         return rpm, pos_e, euler_e[-1]
     

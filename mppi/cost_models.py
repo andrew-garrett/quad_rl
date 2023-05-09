@@ -59,11 +59,6 @@ class CostModel:
             self.SYSTEM_NOISE_INV = self.SYSTEM_NOISE_INV.to(device=self.config.DEVICE)
             self.U_SHAPE_ARR = self.U_SHAPE_ARR.to(device=self.config.DEVICE)
 
-    def set_new_desired_state(self, state_des):
-        self.state_des = self.METHOD.asarray(state_des, dtype=self.config.DTYPE) # CP and NP and TORCH
-        if len(state_des.shape) <= 1:
-            self.state_des = self.state_des.reshape(1, -1) # CP and NP and TORCH
-
     def compute_state_cost(self, state):
         """
         Compute state-dependent cost

@@ -1,10 +1,10 @@
 {
 	"COST_MODEL": "CostModel",
 	"DTYPE": "float64",
-	"DYNAMICS_MODEL": "SampleLearnedModel",
+	"DYNAMICS_MODEL": "AnalyticalModel",
 	"FREQUENCY": 48,
-	"K": 256,
-	"METHOD": "numpy",
+	"K": 64,
+	"METHOD": "np",
 	"NN_CKPT_PATH": "models/dyn.ckpt",
 	"NN_CONFIG_PATH": "configs/training_config.json",
 	"NN_DATASET_NAME": "AGGRO_000",
@@ -23,7 +23,6 @@
 		0.0,
 		0.0
 	],
-	"SIMULATION_T_HORIZON": 1.5,
 	"SYSTEM_BIAS": 5.0,
 	"SYSTEM_NOISE": 300,
 	"TEMPERATURE": 1.0,

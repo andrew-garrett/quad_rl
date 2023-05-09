@@ -4,8 +4,11 @@ gym-pybullet-drones/
 __pycache__/
 .vscode/
 .conda/
+**.egg-info/
 
 datasets/
+
+tests/
 
 wandb/
 lightning_logs/

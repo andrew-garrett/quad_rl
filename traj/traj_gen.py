@@ -17,7 +17,7 @@ from matplotlib.animation import FuncAnimation
 from tqdm import tqdm
 
 from bootstrap.task_battery import DEFAULT_TASK_NAME, DEFAULT_DATASET_NAME, DEFAULT_ROOT
-from bootstrap.utils import get_traj_params
+from utils import get_traj_params
 
 
 #################### TRAJECTORY GENERATORS ####################
@@ -52,6 +52,7 @@ class TrajectoryGenerator:
             self.path = np.vstack(([row for i, row in enumerate(csv.reader(f)) if i > 0])).astype("float")
         self.path -= self.path[0]
         self.downsample_rate = 5  # Path downsampling rate 
+        self.waypoint_mode = False # Variable to tell us to return only trajectories at waypoints
         self.is_done = False      # Indicator for task completion 
         # Pre-allocate the desired trajectory dictionary
         self.flat_output = { 'x': None, 'x_dot': None, 'x_ddot': None, 'x_dddot': None, 'x_ddddot': None,
@@ -598,6 +599,11 @@ class MinSnapTrajectoryGenerator(TrajectoryGenerator):
             self.is_done = True
         else:
             t_s = float(t - self.t_start_vec[last_tstart_ind])
+            
+            ############## FOR WAYPOINT FOLLOWING
+            if self.waypoint_mode:
+                t_s = 0.0
+            
             c = self.c[last_tstart_ind]
             if t == 0:
                 x = self.points[0]

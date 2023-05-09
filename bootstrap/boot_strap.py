@@ -12,9 +12,9 @@ import json
 
 from bootstrap.task_battery import TaskBattery
 from bootstrap.task_gen import Tasks
-from bootstrap.utils import cleanup
-from traj_gen import yield_all_task_trajectories
-import traj_track
+from utils import cleanup
+from traj.traj_gen import yield_all_task_trajectories
+import traj.traj_track as traj_track
 
 
 #################### GLOBAL VARIABLES ####################

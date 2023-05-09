@@ -13,7 +13,7 @@ from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 from CustomLogger import CustomLogger
 from gym_pybullet_drones.utils.utils import sync
 
-from bootstrap.utils import get_tracking_config, render_markers, render_rollouts
+from utils import get_tracking_config, render_markers, render_rollouts
 from mppi.MPPIControl import MPPIControl
 
 
@@ -134,7 +134,7 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
     # Set targets
     target_pos = env.INIT_XYZS + target_state["x"]
     target_vel = np.zeros_like(env.INIT_XYZS) + target_state["x_dot"]
-    target_rpy = env.INIT_RPYS + np.array([0., 0., target_state["yaw"]]) # Rotation.from_euler("xyz", [0., 0., target_state["yaw"]]).as_euler("xyz")
+    target_rpy = env.INIT_RPYS + np.array([0., 0., target_state["yaw"]])
     target_rpy_rates = np.zeros_like(env.INIT_XYZS) + np.array([0., 0., target_state["yaw_dot"]])
 
     # If using MPPI control, collect the next_time_horizon of state trajectories
@@ -143,22 +143,14 @@ def get_control(t, trajectory, env, ctrl, config, target_state, obs, action):
         for k in range(env.NUM_DRONES):
             ctrl[k].set_reference_trajectory(t, trajectory, env.INIT_XYZS[k], target_vel[k], target_rpy[k], target_rpy_rates[k])
             # Rollout and reference trajectory visualization is extremely time-consuming, so it's best to avoid it
-        #     if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
-        #         ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
-        #         if ref_traj_k is not None:
-        #             ref_traj_arr.append(ref_traj_k)
-        #         if rollout_traj_k is not None:
-        #             rollout_traj_arr.append(rollout_traj_k)
-        # if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
-        #     config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
-
-    # # Apply noise to the targets
-    # pos_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_p, size=(env.NUM_DRONES, 3))
-    # target_pos += pos_noise
-    # vel_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_v, size=(env.NUM_DRONES, 3))
-    # target_vel += vel_noise
-    # rpy_noise = config.TARGET_NOISE_MODEL.rng.normal(loc=0., scale=config.TARGET_NOISE_MODEL.sigma_r, size=(env.NUM_DRONES, 3))
-    # target_rpy = (Rotation.from_euler("xyz", rpy_noise, degrees=False) * Rotation.from_euler("xyz", target_rpy, degrees=False)).as_euler("xyz", degrees=False)
+            if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+                ref_traj_k, rollout_traj_k = ctrl[k].get_trajectories(reference=True, rollout=True)
+                if ref_traj_k is not None:
+                    ref_traj_arr.append(ref_traj_k)
+                if rollout_traj_k is not None:
+                    rollout_traj_arr.append(rollout_traj_k)
+        if np.cbrt(env.NUM_DRONES) <= 2 and config.USER_DEBUG_GUI:
+            config = render_rollouts(config, ref_traj_arr=ref_traj_arr, rollout_traj_arr=rollout_traj_arr)
     
     # Collect Position Error
     pos_error = np.zeros((env.NUM_DRONES, 3))

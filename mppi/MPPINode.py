@@ -42,7 +42,6 @@ def get_mppi_config(config_fpath="./configs/mppi_config.json"):
     # Set derived/processed parameters
     config_dict["DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
     config_dict["T"] = int(config_dict["T_HORIZON"] * config_dict["FREQUENCY"])
-    config_dict["SIMULATION_T"] = int(config_dict["SIMULATION_T_HORIZON"] * config_dict["FREQUENCY"])
     config_dict["METHOD"] = config_dict["METHOD"].lower()
     if config_dict["METHOD"] in ("torch", "cupy"):
         config_dict["DYNAMICS_MODEL"] = config_dict["METHOD"].capitalize() + config_dict["DYNAMICS_MODEL"]

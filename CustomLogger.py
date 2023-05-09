@@ -1,4 +1,5 @@
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from datetime import datetime
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -7,7 +8,6 @@ from cycler import cycler
 
 from gym_pybullet_drones.utils.Logger import Logger
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class CustomLogger(Logger):
     """A sub-class for more logging and visualization.
